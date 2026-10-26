@@ -116,7 +116,13 @@ def build_parts(job_dir: Path, result: dict, stem_path: Callable[[str], Path],
     """Transcribe each instrument that is playing into result['parts']."""
     playing = {s for s, level in levels.items() if level >= PRESENT * mix_rms}
     loudest = max(GUITAR_SOURCES, key=lambda s: levels.get(s, 0.0))
-    guitar_src = "guitar" if levels.get("guitar", 0) >= 0.3 * levels.get(loudest, 0) else loudest
+    guitar_level = levels.get("guitar", 0.0)
+    loudest_level = levels.get(loudest, 0.0)
+    # Prefer the dedicated guitar stem when it is competitive; otherwise fall back and say so.
+    if guitar_level >= 0.3 * loudest_level and "guitar" in levels:
+        guitar_src, guitar_fallback = "guitar", False
+    else:
+        guitar_src, guitar_fallback = loudest, True
 
     sources = {"guitar": guitar_src, "bass": "bass", "piano": "piano", "melody": "vocals"}
     parts = {}
@@ -125,6 +131,12 @@ def build_parts(job_dir: Path, result: dict, stem_path: Callable[[str], Path],
             found = notes.detect(stem_path(stem), part)
             _write(job_dir / f"notes_{part}.json", found)
             parts[part] = {"source": stem}
+            if part == "guitar":
+                parts[part]["source_fallback"] = guitar_fallback
+                parts[part]["source_reason"] = (
+                    f"guitar stem quiet vs {loudest}; tab from {stem}"
+                    if guitar_fallback else "dedicated guitar stem"
+                )
             if part in ("piano", "melody"):
                 parts[part]["notes"] = [[n["start"], n["end"], n["pitch"], round(n["amp"], 2)] for n in found]
     if "drums" in playing:
@@ -202,7 +214,12 @@ def _retab(job_dir: Path, result: dict) -> None:
         flats = chords.uses_flats((tonic - shift - capo) % 12, key["mode"])
         tab = tabs.build_tab(load_notes(job_dir, "guitar"), beats, result["measures"], result["chords"],
                              strings, capo, -shift - capo, flats)
-        parts["guitar"] = {"source": parts["guitar"]["source"], **tab}
+        prev = parts["guitar"]
+        parts["guitar"] = {
+            "source": prev.get("source", "guitar"),
+            **tab,
+            **{k: prev[k] for k in ("source_fallback", "source_reason") if k in prev},
+        }
     if "bass" in parts:  # the bass follows the band's tuning, without a capo
         flats = chords.uses_flats((tonic - shift) % 12, key["mode"])
         tab = tabs.build_tab(load_notes(job_dir, "bass"), beats, result["measures"], result["chords"],

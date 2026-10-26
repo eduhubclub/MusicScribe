@@ -338,6 +338,7 @@ function showSong(job) {
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
         <span>Length <b>${fmtTime(r.duration)}</b></span>
+        ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Guitar tab ← ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
       </div>
     </div>
     <div class="player">
@@ -776,10 +777,14 @@ function showSong(job) {
     const tuning = `${esc(r.tuning.name[0].toLowerCase() + r.tuning.name.slice(1))} (${tab.tuning})`;
     const legato = "h hammer-on · p pull-off · / \\ slide";
     const edit = " · click a measure to edit frets / delete / nudge ±16th";
+    const ghosts = tab.ghost_filtered ? ` · ${tab.ghost_filtered} quiet/bleed notes filtered` : "";
+    const fallback = part === "guitar" && tab.source_fallback
+      ? ` · <span class="warn">no clear guitar stem — using ${esc(STEM_LABELS[tab.source] || tab.source)} (${esc(tab.source_reason || "fallback")})</span>`
+      : "";
     if (part === "bass") {
-      return `${where} · ${tuning} · ${tab.note_count} notes${edit} · ${legato}${midi}.`;
+      return `${where}${ghosts} · ${tuning} · ${tab.note_count} notes${edit} · ${legato}${midi}.`;
     }
-    return `${where} · ${tuning}${tab.capo ? ` · capo ${tab.capo}` : ""} · ${tab.note_count} notes${edit} · ${legato}${st.semis ? " · tab ignores key transpose" : ""}${midi}.`;
+    return `${where}${fallback}${ghosts} · ${tuning}${tab.capo ? ` · capo ${tab.capo}` : ""} · ${tab.note_count} notes${edit} · ${legato}${st.semis ? " · tab ignores key transpose" : ""}${midi}.`;
   }
 
   let editNotes = null; // cached notes for fretted-part editor

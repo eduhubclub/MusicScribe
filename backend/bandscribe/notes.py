@@ -7,12 +7,12 @@ import numpy as np
 # MIDI pitch range kept. Bass and melody lines are reduced to one note at a time.
 # `fold` (low, high) moves notes by octaves into that range.
 PROFILES = {
-    "guitar": dict(min_hz=60.0, max_hz=1400.0, onset=0.6, frame=0.35, min_ms=80, lowest=35, highest=83, mono=False,
-                   articulate=True),
+    "guitar": dict(min_hz=60.0, max_hz=1400.0, onset=0.65, frame=0.38, min_ms=90, lowest=35, highest=83, mono=False,
+                   articulate=True, min_amp=0.28),
     # Basic Pitch often hears a bass note's overtone, so bass notes are folded by octaves
     # into the range a bass line actually sits in (D1 to E3).
-    "bass": dict(min_hz=28.0, max_hz=400.0, onset=0.5, frame=0.3, min_ms=100, lowest=23, highest=67, mono=True,
-                 fold=(26, 52), articulate=True),
+    "bass": dict(min_hz=28.0, max_hz=400.0, onset=0.55, frame=0.32, min_ms=100, lowest=23, highest=67, mono=True,
+                 fold=(26, 52), articulate=True, min_amp=0.24),
     "piano": dict(min_hz=27.5, max_hz=4200.0, onset=0.5, frame=0.3, min_ms=60, lowest=21, highest=108, mono=False),
     "melody": dict(min_hz=80.0, max_hz=1100.0, onset=0.5, frame=0.3, min_ms=100, lowest=40, highest=84, mono=True),
 }
@@ -37,9 +37,10 @@ def detect(path: Path, profile: str) -> list[dict]:
         minimum_frequency=p["min_hz"],
         maximum_frequency=p["max_hz"],
     )
+    min_amp = p.get("min_amp", MIN_AMP)
     notes = []
     for s, e, n, a, *rest in events:
-        if not (p["lowest"] <= n <= p["highest"] and a >= MIN_AMP):
+        if not (p["lowest"] <= n <= p["highest"] and a >= min_amp):
             continue
         note = {"start": round(float(s), 3), "end": round(float(e), 3), "pitch": int(n), "amp": round(float(a), 3)}
         if p.get("articulate"):

@@ -13,7 +13,11 @@ SLOTS_PER_BEAT = 4
 TOP_CANDIDATES = 40
 MOVE_COST = 0.25
 # Bleed from other instruments comes through quiet and with almost no attack.
-GHOST_ATTACK, GHOST_AMP = 0.35, 0.55
+# Stricter than the first pass: either weak attack+amp, or very quiet regardless of attack.
+GHOST_ATTACK, GHOST_AMP = 0.42, 0.62
+GHOST_AMP_HARD = 0.28          # always drop below this amp
+GHOST_SHORT_MS = 0.09          # short + quiet → ghost even if attack is middling
+GHOST_SHORT_AMP = 0.48
 # Consecutive notes join into a hammer-on, pull-off or slide when the first rings into the second,
 # they are a short step apart and close in time. A slide shows as a glide into the second note.
 LEGATO_GAP = 0.08    # seconds the first note may stop short of the second
@@ -192,10 +196,15 @@ def build_tab(notes: list[dict], beats: np.ndarray, measures: list[dict], segmen
     n_strings = len(tuning)
     period = float(np.median(np.diff(beats))) if len(beats) > 1 else 0.5
 
-    by_slot: dict[int, dict[int, dict]] = {}
+    kept, ghosts = [], 0
     for n in notes:
-        if n.get("attack", 1.0) < GHOST_ATTACK and n["amp"] < GHOST_AMP:
+        if is_ghost(n):
+            ghosts += 1
             continue
+        kept.append(n)
+
+    by_slot: dict[int, dict[int, dict]] = {}
+    for n in kept:
         bucket = by_slot.setdefault(slot_of(n["start"], beats, period), {})
         if n["pitch"] not in bucket or n["amp"] > bucket[n["pitch"]]["amp"]:
             bucket[n["pitch"]] = n
@@ -239,6 +248,21 @@ def build_tab(notes: list[dict], beats: np.ndarray, measures: list[dict], segmen
         "tuning": " ".join(FLATS[p % 12] for p in strings),
         "string_names": string_names(strings),
         "capo": capo,
-        "note_count": len(notes),
+        "note_count": len(kept),
+        "ghost_filtered": ghosts,
         "measures": out_measures,
     }
+
+
+def is_ghost(n: dict) -> bool:
+    """True when a detected note looks like stem bleed rather than a real pluck."""
+    amp = float(n.get("amp", 0))
+    attack = float(n.get("attack", 1.0))
+    dur = float(n.get("end", 0)) - float(n.get("start", 0))
+    if amp < GHOST_AMP_HARD:
+        return True
+    if attack < GHOST_ATTACK and amp < GHOST_AMP:
+        return True
+    if dur < GHOST_SHORT_MS and amp < GHOST_SHORT_AMP:
+        return True
+    return False
