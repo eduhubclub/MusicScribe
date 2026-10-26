@@ -109,9 +109,17 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .chunk { display: inline-flex; flex-direction: column; margin-right: .6ch; cursor: pointer; }
 .chunk .c { color: var(--accent); font-weight: 600; min-height: 1.4em; white-space: pre; }
 .chunk .c.carry { opacity: .55; }
-.chunk .w { white-space: pre; border-radius: 3px; padding: 0 1px; }
+.chunk .w-wrap { display: inline-flex; align-items: stretch; position: relative; }
+.chunk .w { white-space: pre; border-radius: 3px; padding: 0 1px; outline: none; }
 .chunk .w.on { background: var(--accent-2); color: #08202b; }
+.chunk .w:focus { box-shadow: 0 0 0 1px var(--accent-2); }
 .chunk .c.editable:hover { text-decoration: underline; }
+.t-handle {
+  width: 5px; cursor: ew-resize; background: transparent; border-radius: 2px;
+  align-self: stretch; opacity: 0; transition: opacity .12s, background .12s;
+}
+.chunk:hover .t-handle, .chunk:focus-within .t-handle { opacity: 1; background: var(--line); }
+.t-handle:hover, .t-handle:active { background: var(--accent-2); }
 .instrumental { color: var(--muted); margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 0; }
 .instrumental .m { padding: 0 .9ch; border-left: 1px solid var(--line); white-space: pre; }
 .instrumental .m:last-child { border-right: 1px solid var(--line); }

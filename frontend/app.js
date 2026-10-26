@@ -571,7 +571,7 @@ function showSong(job) {
     const bl = blocks();
     if (!bl.length) { view.innerHTML = `<p class="empty">No chords or lyrics were detected.</p>`; return; }
     const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
-    let html = `<p class="hint no-print">Click a word to jump there · click a chord to change it (empty = remove) · click above a word to add a chord · double-click a word to fix the lyric${missing}.</p><div class="sheet">`;
+    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
         html += `<div class="instrumental">${b.measures.map(m =>
@@ -583,7 +583,7 @@ function showSong(job) {
           const label = c.chords.map(x => esc(show(x.name))).join(" ");
           const carry = c.chords.length && c.chords.every(x => x.carry) ? " carry" : "";
           const si = c.chords.length ? c.chords[0].si : "";
-          return `<span class="chunk" data-wi="${c.wi}"><span class="c editable${carry}" data-si="${si}">${label || " "}</span><span class="w">${esc(c.w.text)}</span></span>`;
+          return `<span class="chunk" data-wi="${c.wi}"><span class="c editable${carry}" data-si="${si}">${label || " "}</span><span class="w-wrap"><i class="t-handle t-start no-print" title="Drag start · Alt+←/→ nudge 50ms"></i><span class="w">${esc(c.w.text)}</span><i class="t-handle t-end no-print" title="Drag end · Alt+←/→ nudge 50ms"></i></span></span>`;
         }).join("") + `</div>`;
       }
     }
@@ -603,7 +603,15 @@ function showSong(job) {
         words.push({ start: w.start, end: w.end, el: wEl, lineEl });
         wEl.onclick = () => { audio.currentTime = w.start; };
         wEl.ondblclick = () => editWord(ln, w, wEl);
+        wEl.onkeydown = e => {
+          if (!e.altKey) return;
+          if (e.key === "ArrowLeft") { e.preventDefault(); nudgeWord(ln, w, -0.05); }
+          if (e.key === "ArrowRight") { e.preventDefault(); nudgeWord(ln, w, 0.05); }
+        };
+        wEl.tabIndex = 0;
         ch.querySelector(".c").onclick = e => editChord(e.currentTarget, w);
+        bindTimingHandle(ch.querySelector(".t-start"), ln, w, "start");
+        bindTimingHandle(ch.querySelector(".t-end"), ln, w, "end");
       });
     });
     view.querySelectorAll(".instrumental .m").forEach(el => {
@@ -667,7 +675,13 @@ function showSong(job) {
     wEl.contentEditable = "true";
     wEl.focus();
     document.getSelection().selectAllChildren(wEl);
-    wEl.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); wEl.blur(); } };
+    wEl.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); wEl.blur(); }
+      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        nudgeWord(ln, w, e.key === "ArrowLeft" ? -0.05 : 0.05);
+      }
+    };
     wEl.onblur = () => {
       wEl.contentEditable = "false";
       const text = wEl.textContent.trim();
@@ -680,6 +694,60 @@ function showSong(job) {
       }
       persist();
       render();
+    };
+  }
+
+  /** Keep word order inside a line: prev.end ≤ start < end ≤ next.start (min 40ms). */
+  function clampWordTiming(ln, w) {
+    const i = ln.words.indexOf(w);
+    const prev = i > 0 ? ln.words[i - 1] : null;
+    const next = i < ln.words.length - 1 ? ln.words[i + 1] : null;
+    const lo = prev ? prev.end : Math.max(0, ln.start - 0.5);
+    const hi = next ? next.start : Math.min(r.duration, ln.end + 0.5);
+    const minDur = 0.04;
+    w.start = Math.max(lo, Math.min(w.start, hi - minDur));
+    w.end = Math.max(w.start + minDur, Math.min(w.end, hi));
+    ln.start = ln.words[0].start;
+    ln.end = ln.words[ln.words.length - 1].end;
+  }
+
+  function nudgeWord(ln, w, delta) {
+    w.start = +(w.start + delta).toFixed(3);
+    w.end = +(w.end + delta).toFixed(3);
+    clampWordTiming(ln, w);
+    persist();
+    render();
+  }
+
+  function bindTimingHandle(el, ln, w, edge) {
+    if (!el) return;
+    el.onpointerdown = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.setPointerCapture(e.pointerId);
+      const originX = e.clientX;
+      const originT = w[edge];
+      // ~8px ≈ 50ms at typical zoom — scale from view width vs duration of the line
+      const lineMs = Math.max(ln.end - ln.start, 0.5);
+      const linePx = Math.max(el.closest(".line")?.getBoundingClientRect().width || 400, 80);
+      const pxPerSec = linePx / lineMs;
+      const onMove = ev => {
+        const dt = (ev.clientX - originX) / pxPerSec;
+        w[edge] = +(originT + dt).toFixed(3);
+        if (edge === "start" && w.start > w.end - 0.04) w.start = w.end - 0.04;
+        if (edge === "end" && w.end < w.start + 0.04) w.end = w.start + 0.04;
+        clampWordTiming(ln, w);
+        el.title = `${edge} ${w[edge].toFixed(2)}s`;
+      };
+      const onUp = () => {
+        el.releasePointerCapture(e.pointerId);
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onUp);
+        persist();
+        render();
+      };
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onUp);
     };
   }
 
