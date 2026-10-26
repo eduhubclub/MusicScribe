@@ -357,6 +357,7 @@ function showSong(job) {
         <label title="Keep the current line in view while playing (pauses briefly when you scroll yourself)"><input type="checkbox" id="follow"> Auto-scroll</label>
         <button id="keysBtn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">🎹 Keyboard</button>
         <button id="export">Export .txt</button>
+        <button id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
         <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>
         <button id="print">Print</button>
       </div>
@@ -493,6 +494,12 @@ function showSong(job) {
   followBox.onchange = () => { st.follow = followBox.checked; store.set("follow", st.follow); };
   app.querySelector("#print").onclick = () => window.print();
   app.querySelector("#export").onclick = () => exportText();
+  app.querySelector("#pdf").onclick = () => {
+    const parts = ["chords"];
+    if (r.parts?.guitar?.note_count) parts.push("guitar");
+    else if (r.parts?.bass?.note_count) parts.push("bass");
+    window.location.href = `/api/jobs/${id}/pdf?parts=${parts.join(",")}`;
+  };
 
   const tabBtns = app.querySelectorAll(".tabs button");
   tabBtns.forEach(b => (b.onclick = () => { st.view = b.dataset.view; store.set("view", st.view); render(); }));

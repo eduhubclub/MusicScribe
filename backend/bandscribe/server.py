@@ -8,7 +8,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import lyrics, midi, pipeline
+from . import lyrics, midi, pdf_export, pipeline
 from .audio import read_tags
 from .jobs import JobStore
 from .lyrics import WHISPER_MODELS
@@ -163,6 +163,25 @@ def job_midi(job_id: str, part: str):
     name = "".join(c for c in meta["title"] if c.isalnum() or c in " -_").strip() or "song"
     return Response(data, media_type="audio/midi",
                     headers={"Content-Disposition": f'attachment; filename="{name} - {part}.mid"'})
+
+
+@app.get("/api/jobs/{job_id}/pdf")
+def job_pdf(job_id: str, parts: str = "chords,guitar"):
+    """Server-generated PDF of chord sheet and/or ASCII tabs."""
+    meta = _get(job_id)
+    if meta["status"] != "done":
+        raise HTTPException(409, "job is not finished")
+    result = store.result(job_id)
+    if not result:
+        raise HTTPException(404, "result not found")
+    wanted = [p.strip() for p in parts.split(",") if p.strip()]
+    data = pdf_export.build_pdf(meta["title"], result, wanted)
+    name = "".join(c for c in meta["title"] if c.isalnum() or c in " -_").strip() or "song"
+    return Response(
+        data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
+    )
 
 
 @app.post("/api/jobs/{job_id}/lyrics")

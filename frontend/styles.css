@@ -192,11 +192,17 @@ button.on { border-color: var(--accent); color: var(--accent); }
 }
 
 @media print {
-  .topbar, .player, .tabs, .hint, .no-print { display: none !important; }
+  .topbar, .player, .tabs, .hint, .no-print, .suggest, #upgrade, .controls { display: none !important; }
   #view { padding-bottom: 0; }
   html, body { background: #fff; color: #000; }
+  main { max-width: none; padding: 0; }
   .chunk .c, .instrumental .m b, .tabrow .chordline { color: #000; }
   .chunk .w.on { background: none; color: #000; }
-  .song-head h1 { color: #000; }
+  .song-head { margin-bottom: 8px; page-break-after: avoid; }
+  .song-head h1 { color: #000; font-size: 20pt; }
   .facts, .facts b { color: #333; }
+  .sheet, .tabwrap { font-size: 10pt; }
+  .tabrow { page-break-inside: avoid; margin-bottom: 10pt; }
+  .line { page-break-inside: avoid; }
+  .section-label { color: #555; margin-top: 12pt; }
 }
