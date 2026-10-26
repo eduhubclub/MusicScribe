@@ -26,6 +26,8 @@ async function json(res) {
 const api = {
   list: () => fetch("/api/jobs").then(json),
   get: id => fetch(`/api/jobs/${id}`).then(json),
+  privacy: () => fetch("/api/privacy").then(json),
+  clearLocal: () => fetch("/api/privacy/clear", { method: "POST" }).then(json),
   upload(file, opts) {
     const fd = new FormData();
     fd.append("file", file, file.name);
@@ -116,9 +118,14 @@ route();
 function showLibrary() {
   const opts = store.get("opts", { whisper_model: "small", language: "" });
   app.innerHTML = `
+    <div class="privacy-banner" id="privacyBanner">
+      <strong>Private by default.</strong>
+      <span id="privacyText">Loading privacy status…</span>
+      <button id="clearLocal" title="Delete ephemeral jobs and browser prefs on this machine">Clear local data</button>
+    </div>
     <section class="drop" id="drop">
       <h2>Drop a song here</h2>
-      <p>MP3, WAV, FLAC, M4A, video files, or record from your microphone. Everything runs on this PC.</p>
+      <p>MP3, WAV, FLAC, M4A, video files, or record from your microphone. Files stay on this machine — no cloud upload, no accounts.</p>
       <input type="file" id="file" accept="audio/*,video/*" hidden>
       <button class="primary" id="pick">Choose file</button>
       <button id="rec">🎙 Record</button>
@@ -141,6 +148,24 @@ function showLibrary() {
       <p id="status" style="margin:14px 0 0"></p>
     </section>
     <div class="jobs" id="jobs"></div>`;
+
+  api.privacy().then(p => {
+    app.querySelector("#privacyText").textContent = p.promise;
+  }).catch(() => {
+    app.querySelector("#privacyText").textContent =
+      "Helper unreachable. When running locally, audio never leaves this PC.";
+  });
+  app.querySelector("#clearLocal").onclick = async () => {
+    if (!confirm("Delete all local song jobs and browser prefs on this machine? This cannot be undone.")) return;
+    try {
+      if (window.LocalStore) await LocalStore.clearAllLocalData();
+      else await api.clearLocal();
+      location.hash = "#/";
+      route();
+    } catch (e) {
+      alert(`Clear failed: ${e.message}`);
+    }
+  };
 
   const drop = app.querySelector("#drop");
   const fileInput = app.querySelector("#file");

@@ -8,15 +8,16 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import lyrics, midi, pdf_export, pipeline
+from . import lyrics, midi, pdf_export, pipeline, privacy
 from .audio import read_tags
 from .jobs import JobStore
 from .lyrics import WHISPER_MODELS
 
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = ROOT / "frontend"
-DATA = Path(os.environ.get("BANDSCRIBE_DATA", ROOT / "data"))
-store = JobStore(DATA / "jobs")
+# Default: ephemeral OS-temp jobs (not a durable shared data/ library). Opt into keep via env.
+JOBS_ROOT = privacy.ephemeral_root(ROOT)
+store = JobStore(JOBS_ROOT)
 tuning_lock = threading.Lock()  # one tab rebuild at a time (rapid tuning/capo changes)
 ALLOWED_EXT = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".webm", ".mp4", ".wma", ".aiff", ".aif"}
 
@@ -25,8 +26,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if not privacy.keep_jobs():
+        removed = privacy.wipe_jobs(JOBS_ROOT)
+        logging.getLogger(__name__).info("privacy: wiped %s ephemeral job(s) at start", removed)
     store.start()
     yield
+    if not privacy.keep_jobs():
+        privacy.wipe_jobs(JOBS_ROOT)
 
 
 app = FastAPI(title="Bandscribe", lifespan=lifespan)
@@ -46,6 +52,28 @@ def _get(job_id: str) -> dict:
         return store.get(job_id)
     except KeyError:
         raise HTTPException(404, "job not found")
+
+
+@app.get("/api/privacy")
+def get_privacy():
+    """Honest privacy posture for the UI banner — no cloud, localhost helper, ephemeral jobs."""
+    return privacy.privacy_info(JOBS_ROOT)
+
+
+@app.post("/api/privacy/clear")
+def clear_local_data():
+    """Delete every local job artifact. Does not talk to any remote service."""
+    # Reject in-flight work first
+    for meta in store.list():
+        if meta.get("status") == "running":
+            raise HTTPException(409, "a song is still processing; wait or retry after it finishes")
+    for meta in list(store.list()):
+        try:
+            store.delete(meta["id"])
+        except Exception:
+            pass
+    privacy.wipe_jobs(JOBS_ROOT)
+    return {"ok": True, "privacy": privacy.privacy_info(JOBS_ROOT)}
 
 
 @app.get("/api/jobs")

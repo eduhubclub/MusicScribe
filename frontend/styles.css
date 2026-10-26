@@ -32,6 +32,16 @@ select, input[type=text] { background: var(--panel-2); border: 1px solid var(--l
 .tagline { color: var(--muted); font-size: 13px; }
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
+/* Privacy */
+.privacy-banner {
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+  margin: 0 0 16px; padding: 10px 14px; border: 1px dashed var(--line);
+  border-radius: var(--radius); background: var(--panel); font-size: 13px; color: var(--muted);
+}
+.privacy-banner strong { color: var(--text); }
+.privacy-banner span { flex: 1 1 280px; }
+.privacy-banner button { margin-left: auto; }
+
 /* Library */
 .drop {
   border: 2px dashed var(--line); border-radius: var(--radius); padding: 36px; text-align: center;

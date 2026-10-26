@@ -5,6 +5,17 @@ track and writes out a part for every instrument: a chord sheet with lyrics, gui
 tabs, piano, drums and the vocal melody. Everything runs on your own computer, with no
 accounts and no uploads.
 
+## Privacy (browser-local)
+
+**Your songs never go to a Music Scribe / Bandscribe cloud.** There are no accounts and no
+remote job store. You pick a file in the browser; the page talks only to a **localhost**
+helper (`127.0.0.1`). Job audio/results default to an **ephemeral** temp folder that is wiped
+when the helper starts and when you click **Clear local data** — not a durable hosted library.
+
+Honest limit: Demucs / Whisper / Basic Pitch still need that local Python helper today. They
+do **not** all run inside the browser tab yet. See
+[`docs/browser-local-architecture.md`](docs/browser-local-architecture.md).
+
 - **Chord sheet:** chords placed over the lyrics, with section headings. Paste your own lyrics
   (Suno gives you them) and they're timed to the song.
 - **Guitar tab:** playable fingerings in any tuning (half step down, Drop D, DADGAD, …) and
@@ -152,7 +163,9 @@ cd $HOME\bandscribe; git pull; powershell -ExecutionPolicy Bypass -File .\setup.
 cd ~/bandscribe && git pull && ./setup.sh
 ```
 
-(The first is for Windows, the second for macOS and Linux.) Your songs are kept.
+(The first is for Windows, the second for macOS and Linux.) Songs are **not** kept by default —
+ephemeral local jobs are wiped on helper restart. Set `BANDSCRIBE_KEEP_JOBS=1` only if you
+explicitly want durable local disk jobs on your machine (still never uploaded).
 
 ### Without git
 
@@ -160,7 +173,7 @@ On this page, click the green **Code** button, then **Download ZIP**, and unzip 
 Windows, open the unzipped folder, click the address bar, type `powershell` and press
 **Enter**. That opens PowerShell inside the folder. Then do steps 2–3 above, skip the `git`
 and `cd` commands in step 4, and continue with `setup.ps1`. To update, download the ZIP
-again and copy your `data` folder (your songs) into the new one.
+again. There is no durable song library to migrate by default.
 
 ### If something goes wrong
 
