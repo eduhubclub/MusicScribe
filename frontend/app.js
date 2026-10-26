@@ -39,6 +39,9 @@ const api = {
   lyrics: (id, text) => fetch(`/api/jobs/${id}/lyrics`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }).then(json),
   tuning: (id, body) => fetch(`/api/jobs/${id}/tuning`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(json),
   save: (id, result) => fetch(`/api/jobs/${id}/result`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) }).then(json),
+  notes: (id, part) => fetch(`/api/jobs/${id}/notes/${part}`).then(json),
+  saveNotes: (id, part, notes) => fetch(`/api/jobs/${id}/notes/${part}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notes }) }).then(json),
+  saveDrumHits: (id, hits) => fetch(`/api/jobs/${id}/drums/hits`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hits }) }).then(json),
   del: id => fetch(`/api/jobs/${id}`, { method: "DELETE" }).then(json),
   retry: id => fetch(`/api/jobs/${id}/retry`, { method: "POST" }).then(json),
 };
@@ -767,20 +770,47 @@ function showSong(job) {
   function tabHint(part, tab) {
     const midi = ` · <a href="/api/jobs/${id}/midi/${part}" download>MIDI</a>`;
     if (part === "drums") {
-      return `BD kick · SD snare · HH hi-hat · CR crash, one character per 16th note (counted 1 e + a) · ${tab.note_count} hits${midi}. Detected from the drum stem, so ghost notes and toms are left out.`;
+      return `BD kick · SD snare · HH hi-hat · CR crash · click a 16th cell to toggle that hit · ${tab.note_count} hits${midi}. Ghost notes and toms are left out.`;
     }
     const where = `Transcribed from the <b>${esc(STEM_LABELS[tab.source] || tab.source)}</b> stem`;
     const tuning = `${esc(r.tuning.name[0].toLowerCase() + r.tuning.name.slice(1))} (${tab.tuning})`;
     const legato = "h hammer-on · p pull-off · / \\ slide";
+    const edit = " · click a measure to edit frets / delete / nudge ±16th";
     if (part === "bass") {
-      return `${where} · ${tuning} · ${tab.note_count} notes, kept to the bass's usual range · ${legato}${midi}. Check octaves by ear.`;
+      return `${where} · ${tuning} · ${tab.note_count} notes${edit} · ${legato}${midi}.`;
     }
-    return `${where} · ${tuning}${tab.capo ? ` · capo ${tab.capo}, frets counted from the capo` : ""} · ${tab.note_count} notes · ${legato}${st.semis ? " · the tab ignores the key transpose" : ""}${midi}. Automatic tabs are a starting point, so check them by ear.`;
+    return `${where} · ${tuning}${tab.capo ? ` · capo ${tab.capo}` : ""} · ${tab.note_count} notes${edit} · ${legato}${st.semis ? " · tab ignores key transpose" : ""}${midi}.`;
+  }
+
+  let editNotes = null; // cached notes for fretted-part editor
+  let editMeasure = null;
+
+  function sixteenthSec() {
+    if (r.beats.length < 2) return 0.125;
+    const period = (r.beats[r.beats.length - 1] - r.beats[0]) / (r.beats.length - 1);
+    return period / 4;
+  }
+
+  async function ensureNotes(part) {
+    if (editNotes && editNotes.part === part) return editNotes.notes;
+    const res = await api.notes(id, part);
+    editNotes = { part, notes: res.notes };
+    return editNotes.notes;
+  }
+
+  async function persistNotes(part, notes) {
+    const res = await api.saveNotes(id, part, notes);
+    r.parts = res.parts;
+    editNotes = { part, notes: res.notes };
+    render();
   }
 
   function renderTab(part) {
     const tab = r.parts[part];
-    if (!tab || !tab.measures || !tab.measures.length || !tab.note_count) { view.innerHTML = `<p class="empty">No playable notes were found for this part.</p>`; return; }
+    if (!tab || !tab.measures || !tab.measures.length || !tab.note_count) {
+      view.innerHTML = `<p class="empty">No playable notes were found for this part.</p>`;
+      return;
+    }
     const probe = document.createElement("span");
     probe.className = "tabrow";
     probe.style.cssText = "position:absolute;visibility:hidden";
@@ -792,7 +822,7 @@ function showSong(job) {
     const maxChars = Math.max(40, Math.floor(view.clientWidth / charW) - 1);
 
     const pad = " ".repeat(tab.string_names[0].length + 1);
-    let html = `<p class="hint">${tabHint(part, tab)}</p><div class="tabwrap">`;
+    let html = `<p class="hint no-print">${tabHint(part, tab)}</p><div class="tabwrap">`;
     for (const row of tabRows(tab, maxChars)) {
       html += `<pre class="tabrow"><span class="chordline">${pad}${row.map(m => `<span data-tm="${m.i}">${esc(m.chords)}</span>`).join("")}</span>\n`;
       for (let s = 0; s < tab.string_names.length; s++) {
@@ -800,15 +830,124 @@ function showSong(job) {
       }
       html += "</pre>";
     }
-    view.innerHTML = html + "</div>";
+    html += `</div><div id="tabEdit" class="tab-edit no-print"></div>`;
+    view.innerHTML = html;
     const byMeasure = {};
     view.querySelectorAll("[data-tm]").forEach(el => (byMeasure[el.dataset.tm] ||= []).push(el));
     tab.measures.forEach((m, i) => {
       const meas = measures.find(x => x.beat === m.beat);
       if (meas && byMeasure[i]) {
         measureEls.push({ start: meas.start, end: meas.end, els: byMeasure[i] });
-        byMeasure[i].forEach(el => (el.onclick = () => { audio.currentTime = meas.start; }));
+        byMeasure[i].forEach(el => (el.onclick = () => {
+          audio.currentTime = meas.start;
+          if (part === "drums") openDrumEdit(meas, i);
+          else openFretEdit(part, meas, i);
+        }));
       }
+    });
+    if (editMeasure != null && part !== "drums") openFretEdit(part, measures.find(x => x.beat === tab.measures[editMeasure]?.beat), editMeasure);
+  }
+
+  async function openFretEdit(part, meas, mi) {
+    if (!meas) return;
+    editMeasure = mi;
+    const box = view.querySelector("#tabEdit");
+    if (!box) return;
+    box.innerHTML = `<p class="hint">Loading notes…</p>`;
+    let notes;
+    try { notes = await ensureNotes(part); }
+    catch (e) { box.innerHTML = `<p class="hint">Could not load notes: ${esc(e.message)}</p>`; return; }
+    const step = sixteenthSec();
+    const inMeas = notes
+      .map((n, idx) => ({ n, idx }))
+      .filter(({ n }) => n.start >= meas.start - 0.02 && n.start < meas.end - 0.01);
+    const strings = r.tuning.strings;
+    const capo = r.tuning.capo || 0;
+    const fretOf = pitch => {
+      // Prefer the string where fret is smallest non-negative within range
+      let best = null;
+      for (let s = 0; s < strings.length; s++) {
+        const f = pitch - (strings[s] + capo);
+        if (f >= 0 && f <= 19 && (best == null || f < best.fret)) best = { string: s, fret: f };
+      }
+      return best || { string: 0, fret: Math.max(0, pitch - (strings[0] + capo)) };
+    };
+    box.innerHTML = `
+      <div class="tab-edit-head">Measure @ ${fmtTime(meas.start)} · ${inMeas.length} note(s)
+        <button id="closeEdit">Close</button></div>
+      ${inMeas.length ? `<table class="note-table"><thead><tr><th>Time</th><th>Str</th><th>Fret</th><th></th></tr></thead><tbody>
+        ${inMeas.map(({ n, idx }) => {
+          const fr = fretOf(n.pitch);
+          return `<tr data-ni="${idx}">
+            <td>${n.start.toFixed(2)}s</td>
+            <td>${fr.string + 1}</td>
+            <td><input class="fret-in" type="number" min="0" max="19" value="${fr.fret}" data-str="${fr.string}"></td>
+            <td class="note-actions">
+              <button data-act="left" title="Nudge −16th">−16th</button>
+              <button data-act="right" title="Nudge +16th">+16th</button>
+              <button data-act="del" class="danger">Delete</button>
+            </td>
+          </tr>`;
+        }).join("")}
+      </tbody></table>` : `<p class="hint">No notes in this measure (ghosts may be filtered).</p>`}`;
+    box.querySelector("#closeEdit").onclick = () => { editMeasure = null; box.innerHTML = ""; };
+    box.querySelectorAll("tr[data-ni]").forEach(tr => {
+      const idx = +tr.dataset.ni;
+      tr.querySelector(".fret-in").onchange = async e => {
+        const str = +e.target.dataset.str;
+        const fret = Math.max(0, Math.min(19, +e.target.value || 0));
+        notes[idx] = { ...notes[idx], pitch: strings[str] + capo + fret };
+        await persistNotes(part, notes);
+      };
+      tr.querySelector('[data-act="left"]').onclick = async () => {
+        notes[idx] = { ...notes[idx], start: +(notes[idx].start - step).toFixed(3), end: +(notes[idx].end - step).toFixed(3) };
+        await persistNotes(part, notes);
+      };
+      tr.querySelector('[data-act="right"]').onclick = async () => {
+        notes[idx] = { ...notes[idx], start: +(notes[idx].start + step).toFixed(3), end: +(notes[idx].end + step).toFixed(3) };
+        await persistNotes(part, notes);
+      };
+      tr.querySelector('[data-act="del"]').onclick = async () => {
+        notes.splice(idx, 1);
+        await persistNotes(part, notes);
+      };
+    });
+  }
+
+  async function openDrumEdit(meas, mi) {
+    const box = view.querySelector("#tabEdit");
+    if (!box) return;
+    const tab = r.parts.drums;
+    const hits = (tab.hits || []).map(([t, k]) => [t, k]);
+    const kinds = [["kick", "BD"], ["snare", "SD"], ["hihat", "HH"], ["crash", "CR"]];
+    const step = sixteenthSec();
+    const slots = [];
+    for (let t = meas.start; t < meas.end - 0.001; t += step) slots.push(+t.toFixed(3));
+    const has = (t, kind) => hits.some(([ht, hk]) => hk === kind && Math.abs(ht - t) < step * 0.45);
+    box.innerHTML = `
+      <div class="tab-edit-head">Drums @ ${fmtTime(meas.start)} · click to toggle
+        <button id="closeEdit">Close</button></div>
+      <div class="drum-grid">${kinds.map(([kind, label]) => `
+        <div class="drum-row"><span class="drum-lab">${label}</span>
+          ${slots.map(t => `<button class="drum-cell ${has(t, kind) ? "on" : ""}" data-t="${t}" data-k="${kind}"></button>`).join("")}
+        </div>`).join("")}</div>`;
+    box.querySelector("#closeEdit").onclick = () => { box.innerHTML = ""; };
+    box.querySelectorAll(".drum-cell").forEach(btn => {
+      btn.onclick = async () => {
+        const t = +btn.dataset.t, kind = btn.dataset.k;
+        const i = hits.findIndex(([ht, hk]) => hk === kind && Math.abs(ht - t) < step * 0.45);
+        if (i >= 0) hits.splice(i, 1);
+        else hits.push([t, kind]);
+        hits.sort((a, b) => a[0] - b[0]);
+        try {
+          const res = await api.saveDrumHits(id, hits);
+          r.parts.drums = res.parts.drums;
+          render();
+          openDrumEdit(meas, mi);
+        } catch (e) {
+          box.insertAdjacentHTML("beforeend", `<p class="hint">Save failed: ${esc(e.message)}</p>`);
+        }
+      };
     });
   }
 

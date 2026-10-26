@@ -184,6 +184,55 @@ def job_pdf(job_id: str, parts: str = "chords,guitar"):
     )
 
 
+NOTE_PARTS = {"guitar", "bass", "piano", "melody"}
+
+
+@app.get("/api/jobs/{job_id}/notes/{part}")
+def get_notes(job_id: str, part: str):
+    if part not in NOTE_PARTS:
+        raise HTTPException(400, "unknown part")
+    if _get(job_id)["status"] != "done":
+        raise HTTPException(409, "job is not finished")
+    return {"notes": pipeline.load_notes(store.dir(job_id), part)}
+
+
+@app.put("/api/jobs/{job_id}/notes/{part}")
+def put_notes(job_id: str, part: str, payload: dict = Body(...)):
+    """Replace notes for a fretted/pitched part and rebuild its tab (guitar/bass)."""
+    if part not in NOTE_PARTS:
+        raise HTTPException(400, "unknown part")
+    if _get(job_id)["status"] != "done":
+        raise HTTPException(409, "job is not finished")
+    notes = payload.get("notes")
+    if not isinstance(notes, list):
+        raise HTTPException(400, "notes must be a list")
+    for n in notes:
+        if not isinstance(n, dict) or not all(k in n for k in ("start", "end", "pitch")):
+            raise HTTPException(400, "each note needs start, end, pitch")
+    with tuning_lock:
+        result = pipeline.save_notes(store.dir(job_id), store.result(job_id), part, notes)
+    return {"parts": result["parts"], "notes": pipeline.load_notes(store.dir(job_id), part)}
+
+
+@app.put("/api/jobs/{job_id}/drums/hits")
+def put_drum_hits(job_id: str, payload: dict = Body(...)):
+    """Replace drum hits and rebuild the drum ASCII tab."""
+    if _get(job_id)["status"] != "done":
+        raise HTTPException(409, "job is not finished")
+    hits = payload.get("hits")
+    if not isinstance(hits, list):
+        raise HTTPException(400, "hits must be a list of [time, kind]")
+    allowed = {"kick", "snare", "hihat", "crash"}
+    cleaned = []
+    for h in hits:
+        if not isinstance(h, (list, tuple)) or len(h) != 2 or h[1] not in allowed:
+            raise HTTPException(400, "each hit must be [time, kick|snare|hihat|crash]")
+        cleaned.append([float(h[0]), h[1]])
+    with tuning_lock:
+        result = pipeline.save_drum_hits(store.dir(job_id), store.result(job_id), cleaned)
+    return {"parts": {"drums": result["parts"]["drums"]}}
+
+
 @app.post("/api/jobs/{job_id}/lyrics")
 def set_lyrics(job_id: str, payload: dict = Body(...)):
     """Replace the transcription with the user's own lyrics, timed against the song.

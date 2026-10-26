@@ -135,6 +135,24 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .tabrow { font: 14px/1.25 var(--mono); margin: 0 0 18px; white-space: pre; }
 .tabrow .chordline { color: var(--accent); font-weight: 600; }
 .tabrow span.on { background: #20262f; color: #fff; }
+.tab-edit {
+  margin-top: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.tab-edit:empty { display: none; }
+.tab-edit-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.tab-edit-head button { margin-left: auto; }
+.note-table { width: 100%; border-collapse: collapse; font: 13px var(--mono); }
+.note-table th, .note-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.fret-in { width: 4.5em; }
+.note-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.drum-grid { display: grid; gap: 6px; }
+.drum-row { display: flex; align-items: center; gap: 4px; }
+.drum-lab { width: 2.2em; font: 600 12px var(--mono); color: var(--muted); }
+.drum-cell {
+  width: 18px; height: 18px; padding: 0; border-radius: 3px; background: var(--panel-2);
+}
+.drum-cell.on { background: var(--accent); border-color: var(--accent); }
 
 /* Chords view */
 .diagrams { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; }

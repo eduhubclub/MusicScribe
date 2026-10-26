@@ -143,6 +143,50 @@ def load_notes(job_dir: Path, part: str) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
+def save_notes(job_dir: Path, result: dict, part: str, note_list: list[dict]) -> dict:
+    """Persist fretted/pitched notes and rebuild tab measures for guitar/bass (or inline piano/melody)."""
+    _migrate(result)
+    cleaned = []
+    for n in note_list:
+        cleaned.append({
+            "start": round(float(n["start"]), 3),
+            "end": round(float(n["end"]), 3),
+            "pitch": int(n["pitch"]),
+            "amp": round(float(n.get("amp", 0.8)), 3),
+            **({"attack": round(float(n["attack"]), 3)} if "attack" in n else {}),
+            **({"glide": round(float(n["glide"]), 2)} if "glide" in n else {}),
+        })
+    cleaned.sort(key=lambda x: (x["start"], x["pitch"]))
+    _write(job_dir / f"notes_{part}.json", cleaned)
+    parts = result.setdefault("parts", {})
+    src = (parts.get(part) or {}).get("source", part if part != "melody" else "vocals")
+    if part in ("piano", "melody"):
+        parts[part] = {
+            "source": src,
+            "notes": [[n["start"], n["end"], n["pitch"], round(n["amp"], 2)] for n in cleaned],
+        }
+    else:
+        parts.setdefault(part, {"source": src})
+        _retab(job_dir, result)
+    _write(job_dir / "result.json", result)
+    return result
+
+
+def save_drum_hits(job_dir: Path, result: dict, hits: list) -> dict:
+    """Replace drum hits and rebuild the ASCII drum tab + MIDI source list."""
+    _migrate(result)
+    cleaned = [[round(float(t), 3), str(kind)] for t, kind in hits]
+    cleaned.sort(key=lambda x: x[0])
+    beats = np.array(result["beats"])
+    tab = drums.build_tab([(t, k) for t, k in cleaned], beats, result["measures"])
+    result.setdefault("parts", {})["drums"] = {
+        "source": (result.get("parts", {}).get("drums") or {}).get("source", "drums"),
+        **tab,
+    }
+    _write(job_dir / "result.json", result)
+    return result
+
+
 def _retab(job_dir: Path, result: dict) -> None:
     """(Re)build guitar and bass tabs for the current tuning. Chord labels become the shapes
     played: a Db chord on a half-step-down guitar is labelled D."""
