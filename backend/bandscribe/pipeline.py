@@ -7,7 +7,7 @@ from typing import Callable
 import librosa
 import numpy as np
 
-from . import audio, chords, drums, lyrics, notes, rhythm, separate, tabs
+from . import audio, chords, confidence, drums, lyrics, notes, rhythm, separate, tabs
 
 SR = 22050
 # (stage id, label, share of total progress)
@@ -146,6 +146,15 @@ def build_parts(job_dir: Path, result: dict, stem_path: Callable[[str], Path],
     result["parts"] = parts
     result.pop("tab", None)
     _retab(job_dir, result)
+    _attach_confidence(job_dir, result)
+
+
+def _attach_confidence(job_dir: Path, result: dict) -> None:
+    notes_by_part = {}
+    for part in ("guitar", "bass"):
+        if part in (result.get("parts") or {}):
+            notes_by_part[part] = load_notes(job_dir, part)
+    result["confidence"] = confidence.compute(result, notes_by_part)
 
 
 def load_notes(job_dir: Path, part: str) -> list[dict]:
@@ -180,6 +189,7 @@ def save_notes(job_dir: Path, result: dict, part: str, note_list: list[dict]) ->
     else:
         parts.setdefault(part, {"source": src})
         _retab(job_dir, result)
+    _attach_confidence(job_dir, result)
     _write(job_dir / "result.json", result)
     return result
 
@@ -195,6 +205,7 @@ def save_drum_hits(job_dir: Path, result: dict, hits: list) -> dict:
         "source": (result.get("parts", {}).get("drums") or {}).get("source", "drums"),
         **tab,
     }
+    _attach_confidence(job_dir, result)
     _write(job_dir / "result.json", result)
     return result
 

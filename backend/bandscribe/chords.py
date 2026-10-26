@@ -172,7 +172,9 @@ def recognize(harm: np.ndarray, bass: np.ndarray, sr: int, beats: np.ndarray, du
     path = librosa.sequence.viterbi(P, trans)
 
     labels = []
+    beat_scores = []  # max posterior of chosen state — honest uncertainty, not marketing
     for i, k in enumerate(path):
+        beat_scores.append(float(P[k, i]))
         if k == len(states):
             labels.append("N")
         else:
@@ -184,11 +186,16 @@ def recognize(harm: np.ndarray, bass: np.ndarray, sr: int, beats: np.ndarray, du
         start, end = float(times[i]), float(times[i + 1])
         if segments and segments[-1]["chord"] == label:
             segments[-1]["end"] = end
+            segments[-1]["scores"].append(beat_scores[i])
         else:
-            segments.append({"start": start, "end": end, "chord": label})
+            segments.append({"start": start, "end": end, "chord": label, "scores": [beat_scores[i]]})
+    for s in segments:
+        scores = s.pop("scores")
+        s["confidence"] = round(float(np.mean(scores)), 3)
 
     return {
         "key": {"tonic": names[tonic], "mode": mode, "name": f"{names[tonic]} {mode}"},
         "beat_labels": labels,
+        "beat_confidence": [round(s, 3) for s in beat_scores],
         "segments": segments,
     }

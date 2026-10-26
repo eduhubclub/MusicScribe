@@ -78,8 +78,28 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .song-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 24px; margin-bottom: 14px; }
 .song-head h1 { margin: 0; font-size: 26px; flex: 1 1 320px; outline: none; }
 .song-head h1:focus { box-shadow: 0 1px 0 var(--accent); }
-.facts { display: flex; gap: 18px; color: var(--muted); font-size: 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 18px; color: var(--muted); font-size: 14px; align-items: center; }
 .facts b { color: var(--text); }
+.conf-badge {
+  font: 600 11px var(--mono); padding: 2px 7px; border-radius: 4px; border: 1px dashed var(--line);
+  letter-spacing: 0.02em;
+}
+.conf-badge.low { color: var(--danger); border-color: var(--danger); background: #2a1416; }
+.conf-badge.mid { color: var(--accent); border-color: var(--accent); background: #241e10; }
+.conf-badge.ok { color: var(--ok); border-color: #3a6b52; background: #142019; }
+.conf-panel {
+  flex: 1 1 100%; margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--line);
+  border-radius: 8px; background: var(--panel);
+}
+.conf-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.conf-parts { display: grid; gap: 5px; }
+.conf-row { display: grid; grid-template-columns: 72px 1fr 40px; gap: 8px; align-items: center; font: 12px var(--mono); }
+.conf-row i { display: block; height: 6px; background: var(--muted); border-radius: 3px; max-width: 100%; }
+.conf-row.low i { background: var(--danger); }
+.conf-row.mid i { background: var(--accent); }
+.conf-row.ok i { background: var(--ok); }
+.conf-row em { color: var(--muted); font-style: normal; text-align: right; }
+.section-label .conf-badge { margin-left: 10px; vertical-align: middle; }
 
 .player {
   position: sticky; top: 0; z-index: 5; background: rgba(15,17,21,.94); backdrop-filter: blur(6px);

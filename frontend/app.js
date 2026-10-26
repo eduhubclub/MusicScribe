@@ -79,6 +79,20 @@ const PART_VIEWS = [["guitar", "Guitar tab"], ["bass", "Bass tab"], ["piano", "P
 const TAB_VIEWS = ["guitar", "bass", "drums"];
 const ROLL_VIEWS = ["piano", "melody"];
 const STEM_LABELS = { mix: "Full mix", vocals: "Vocals only", guitar: "Guitar", bass: "Bass", piano: "Piano / keys", drums: "Drums", other: "Other" };
+const confLevel = s => (s < 0.55 ? "low" : s < 0.75 ? "mid" : "ok");
+const confBadge = (label, score, title = "") =>
+  `<span class="conf-badge ${confLevel(score)}" title="${esc(title || "")}">${esc(label)} ${Math.round(score * 100)}%</span>`;
+const confMeters = conf => {
+  const parts = Object.entries(conf.by_part || {});
+  if (!parts.length) return "";
+  return `<div class="conf-panel no-print" title="${esc(conf.disclaimer || "")}">
+    <div class="conf-title">Confidence (review low scores — not a guarantee)</div>
+    <div class="conf-parts">${parts.map(([k, v]) => {
+      const why = ((conf.part_reasons || {})[k] || []).join("; ");
+      return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${Math.round(v * 100)}%"></i><em>${Math.round(v * 100)}%</em></div>`;
+    }).join("")}</div>
+  </div>`;
+};
 
 let timers = [];
 let cleanupFns = [];
@@ -339,7 +353,9 @@ function showSong(job) {
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
         <span>Length <b>${fmtTime(r.duration)}</b></span>
         ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Guitar tab ← ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
+        ${r.confidence ? confBadge("overall", r.confidence.overall, r.confidence.disclaimer) : ""}
       </div>
+      ${r.confidence ? confMeters(r.confidence) : ""}
     </div>
     <div class="player">
       <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
@@ -582,7 +598,10 @@ function showSong(job) {
           `<span class="m" data-mi="${m.i}">${m.chords.map(c => `<b>${esc(show(c))}</b>`).join(" ")}</span>`).join("")}</div>`;
       } else {
         const gap = b.li > 0 && (b.gapBefore > 3 || b.line.stanza) ? ' style="margin-top:22px"' : "";
-        if (b.line.section) html += `<div class="section-label">${esc(b.line.section)}</div>`;
+        if (b.line.section) {
+          const sec = (r.confidence?.by_section || []).find(s => s.label === b.line.section);
+          html += `<div class="section-label">${esc(b.line.section)}${sec ? confBadge("trust", sec.score, (sec.reasons || []).join("; ")) : ""}</div>`;
+        }
         html += `<div class="line" data-li="${b.li}"${b.line.section ? "" : gap}>` + lineChunks(b.line).map(c => {
           const label = c.chords.map(x => esc(show(x.name))).join(" ");
           const carry = c.chords.length && c.chords.every(x => x.carry) ? " carry" : "";
