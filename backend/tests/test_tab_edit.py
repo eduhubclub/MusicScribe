@@ -5,12 +5,24 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
-# pipeline imports separate → torch; stub for unit tests without CUDA wheels.
-if "torch" not in sys.modules:
-    sys.modules["torch"] = types.ModuleType("torch")
+# pipeline imports separate → torch; stub only for this module's import of pipeline.
+_torch = types.ModuleType("torch")
+_torch.Tensor = type("Tensor", (), {})  # satisfy scipy array-api probes if they see the stub
 
-from bandscribe import pipeline
+
+def _import_pipeline():
+    with mock.patch.dict(sys.modules, {"torch": _torch}):
+        # Force re-import path for separate/pipeline under the stub.
+        for name in list(sys.modules):
+            if name.startswith("bandscribe.separate") or name.startswith("bandscribe.pipeline"):
+                del sys.modules[name]
+        from bandscribe import pipeline as pl
+        return pl
+
+
+pipeline = _import_pipeline()
 
 
 class TabEditTests(unittest.TestCase):
