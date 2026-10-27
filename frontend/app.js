@@ -190,6 +190,18 @@ function setSidebarOpen(open) {
   if (backdrop) backdrop.hidden = !open;
 }
 
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  store.set("sidebarCollapsed", collapsed);
+  const btn = document.getElementById("sidebarCollapse");
+  if (btn) {
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+    btn.textContent = collapsed ? "›" : "‹";
+  }
+}
+
 function syncSidebarChrome() {
   const upload = document.getElementById("sidebarUpload");
   const tabOwn = document.getElementById("sidebarTabOwn");
@@ -233,10 +245,14 @@ async function refreshSidebar() {
 
 function initSidebar() {
   const toggle = document.getElementById("sidebarToggle");
+  const collapse = document.getElementById("sidebarCollapse");
   const backdrop = document.getElementById("sidebarBackdrop");
   const upload = document.getElementById("sidebarUpload");
   toggle?.addEventListener("click", () => {
     setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+  });
+  collapse?.addEventListener("click", () => {
+    setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
   });
   backdrop?.addEventListener("click", () => setSidebarOpen(false));
   upload?.addEventListener("click", () => {
@@ -244,6 +260,7 @@ function initSidebar() {
       syncSidebarChrome();
     }
   });
+  setSidebarCollapsed(!!store.get("sidebarCollapsed", false));
   refreshSidebar();
   syncSidebarChrome();
 }
@@ -571,7 +588,6 @@ function showSong(job) {
 
   app.innerHTML = `
     <div class="song-head">
-      <h1 contenteditable="true" spellcheck="false" id="title">${esc(job.title)}</h1>
       <div class="facts">
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
@@ -694,13 +710,6 @@ function showSong(job) {
       audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); syncPlayUi(); }, { once: true });
     };
   }
-
-  const titleEl = app.querySelector("#title");
-  titleEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); } });
-  titleEl.addEventListener("blur", () => {
-    const t = titleEl.textContent.trim();
-    if (t && t !== job.title) { job.title = t; api.rename(id, t).catch(() => {}); }
-  });
 
   function updateHeader() {
     app.querySelector("#key").textContent = keyName();
@@ -894,9 +903,8 @@ function showSong(job) {
       if (!t) { sheetTitle.textContent = job.title; return; }
       if (t === job.title) return;
       job.title = t;
-      const chromeTitle = app.querySelector("#title");
-      if (chromeTitle) chromeTitle.textContent = t;
       api.rename(id, t).catch(() => {});
+      refreshSidebar();
     });
   }
 

@@ -38,6 +38,7 @@
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --radius: 12px;
   --sidebar-w: 256px;
+  --sidebar-collapsed-w: 72px;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -81,8 +82,13 @@ select, input[type=text] {
   text-decoration: none; font-weight: 700; font-size: 1.125rem;
   letter-spacing: -0.02em; text-align: center; line-height: 1.25;
   color: var(--chrome-text);
+  display: inline-flex; align-items: center; justify-content: center; gap: 0;
 }
-.brand-mark { color: var(--edu-blue-600); margin-right: 6px; }
+.brand-text { color: var(--chrome-text); }
+.brand-wizard {
+  display: none;
+  width: 40px; height: 48px; object-fit: contain;
+}
 .tagline { display: none; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 @media (min-width: 1024px) {
@@ -99,15 +105,114 @@ body.has-playbar main { padding-bottom: 96px; }
   color: var(--chrome-text);
   border-right: var(--edu-border);
   box-shadow: none;
+  transition: width 0.25s ease;
 }
 .sidebar-brand {
   display: flex; align-items: center; justify-content: center;
+  gap: 4px;
   height: var(--edu-nav-h); min-height: var(--edu-nav-h);
-  padding: 0 12px;
+  padding: 0 8px;
   border-bottom: var(--edu-border);
   flex: 0 0 auto;
+  position: relative;
 }
-.sidebar-brand .brand { font-size: 1rem; }
+.sidebar-brand .brand { font-size: 1rem; min-width: 0; }
+.sidebar-collapse {
+  flex: 0 0 auto;
+  width: 28px; height: 28px; padding: 0;
+  border: none; border-radius: 8px;
+  background: transparent; color: var(--edu-slate-400);
+  font-size: 18px; line-height: 1;
+}
+.sidebar-collapse:hover { background: var(--edu-slate-100); color: var(--edu-slate-900); }
+
+/* Desktop collapsed rail: wizard mark, hide wordmark + labels */
+@media (min-width: 901px) {
+  body.sidebar-collapsed.has-sidebar {
+    padding-left: var(--sidebar-collapsed-w);
+  }
+  body.sidebar-collapsed.has-sidebar .playbar {
+    left: var(--sidebar-collapsed-w);
+  }
+  body.sidebar-collapsed .sidebar {
+    width: var(--sidebar-collapsed-w);
+  }
+  body.sidebar-collapsed .sidebar-brand {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 4px;
+    height: auto;
+    min-height: var(--edu-nav-h);
+  }
+  body.sidebar-collapsed .sidebar-brand .brand {
+    width: 100%;
+  }
+  body.sidebar-collapsed .brand-text {
+    display: none;
+  }
+  body.sidebar-collapsed .brand-wizard {
+    display: block;
+    width: 36px;
+    height: 44px;
+    margin: 0 auto;
+  }
+  body.sidebar-collapsed .sidebar-collapse {
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+  }
+  body.sidebar-collapsed .sidebar-label,
+  body.sidebar-collapsed .sidebar-action-label,
+  body.sidebar-collapsed .sidebar-title,
+  body.sidebar-collapsed .sidebar-meta,
+  body.sidebar-collapsed .sidebar-empty,
+  body.sidebar-collapsed .sidebar-foot {
+    display: none;
+  }
+  body.sidebar-collapsed .sidebar-head {
+    padding: 8px 6px 6px;
+    gap: 6px;
+  }
+  body.sidebar-collapsed .sidebar-actions {
+    flex-direction: column;
+    padding: 0;
+    gap: 6px;
+  }
+  body.sidebar-collapsed .sidebar-upload,
+  body.sidebar-collapsed .sidebar-tabown {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 6px 0;
+    font-size: 14px;
+  }
+  body.sidebar-collapsed .sidebar-upload::before { content: "↑"; }
+  body.sidebar-collapsed .sidebar-tabown::before { content: "✎"; }
+  body.sidebar-collapsed .sidebar-list {
+    padding: 4px 6px 8px;
+    align-items: center;
+  }
+  body.sidebar-collapsed .sidebar-job {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    grid-template-columns: none;
+    min-height: 36px;
+    padding: 6px;
+    width: 100%;
+  }
+  body.sidebar-collapsed .sidebar-job .badge {
+    justify-self: auto;
+    grid-column: auto;
+    grid-row: auto;
+    font-size: 9px;
+    padding: 2px 6px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .sidebar-head {
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
   padding: 12px 8px 10px;
@@ -231,6 +336,7 @@ body.has-sidebar .topbar .brand { display: none; }
   body.sidebar-open .sidebar-backdrop { display: block; }
   .sidebar-backdrop[hidden] { display: none !important; }
   .sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .sidebar-collapse { display: none; }
   .topbar { position: relative; padding-left: 52px; padding-right: 52px; }
 }
 

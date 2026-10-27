@@ -11,13 +11,22 @@
 <body class="has-sidebar">
   <aside id="sidebar" class="sidebar no-print" aria-label="Library">
     <div class="sidebar-brand">
-      <a href="#/" class="brand" title="Home"><span class="brand-mark">♪</span> MusicScribe</a>
+      <a href="#/" class="brand" title="Home">
+        <img class="brand-wizard" src="/assets/wizard-sax.png" alt="" width="40" height="48">
+        <span class="brand-text">MusicScribe</span>
+      </a>
+      <button type="button" class="sidebar-collapse no-print" id="sidebarCollapse"
+        title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">‹</button>
     </div>
     <div class="sidebar-head">
       <span class="sidebar-label">Library</span>
       <div class="sidebar-actions">
-        <a class="sidebar-upload" href="#/" id="sidebarUpload" title="Upload a new song">Upload</a>
-        <a class="sidebar-tabown" href="#/tab-your-own" id="sidebarTabOwn" title="Paste lyrics and add your own chords">Tab your own</a>
+        <a class="sidebar-upload" href="#/" id="sidebarUpload" title="Upload a new song">
+          <span class="sidebar-action-label">Upload</span>
+        </a>
+        <a class="sidebar-tabown" href="#/tab-your-own" id="sidebarTabOwn" title="Paste lyrics and add your own chords">
+          <span class="sidebar-action-label">Tab your own</span>
+        </a>
       </div>
     </div>
     <div class="sidebar-list" id="sidebarJobs" role="navigation" aria-label="Songs on this device">
@@ -29,7 +38,7 @@
   <div class="shell">
     <header class="topbar">
       <button type="button" class="sidebar-toggle no-print" id="sidebarToggle" aria-label="Open library menu" aria-controls="sidebar" aria-expanded="false">☰</button>
-      <a href="#/" class="brand" title="Home"><span class="brand-mark">♪</span> MusicScribe</a>
+      <a href="#/" class="brand" title="Home"><span class="brand-text">MusicScribe</span></a>
     </header>
     <main id="app"></main>
   </div>
