@@ -72,13 +72,13 @@ button, select, input { font: inherit; color: inherit; }
   pointer-events: none; /* clicks pass through to splash (anywhere dismiss) */
 }
 .splash-wizard {
-  width: min(200px, 46vw);
+  width: min(220px, 48vw);
   height: auto;
-  aspect-ratio: 480 / 560;
+  aspect-ratio: 1024 / 1536;
   object-fit: contain;
   display: block;
-  /* Asset is light line art — blacken for white chrome (same as collapsed rail) */
-  filter: brightness(0);
+  /* Source is white-on-black/transparent — invert to black lines on white splash */
+  filter: invert(1);
   image-rendering: auto;
 }
 .splash-title {
