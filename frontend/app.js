@@ -84,17 +84,58 @@ const STEM_LABELS = { mix: "Full mix", vocals: "Vocals only", guitar: "Guitar", 
 const confLevel = s => (s < 0.55 ? "low" : s < 0.75 ? "mid" : "ok");
 const confBadge = (label, score, title = "") =>
   `<span class="conf-badge ${confLevel(score)}" title="${esc(title || "")}">${esc(label)} ${Math.round(score * 100)}%</span>`;
-const confMeters = conf => {
+const confOverallBtn = (score, title = "") =>
+  `<button type="button" class="conf-badge conf-overall ${confLevel(score)}" id="confOverall"
+    title="${esc(title || "Show confidence breakdown")}">overall ${Math.round(score * 100)}%</button>`;
+const confMetersHtml = conf => {
   const parts = Object.entries(conf.by_part || {});
   if (!parts.length) return "";
-  return `<div class="conf-panel no-print" title="${esc(conf.disclaimer || "")}">
-    <div class="conf-title">Confidence (review low scores — not a guarantee)</div>
-    <div class="conf-parts">${parts.map(([k, v]) => {
-      const why = ((conf.part_reasons || {})[k] || []).join("; ");
-      return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${Math.round(v * 100)}%"></i><em>${Math.round(v * 100)}%</em></div>`;
-    }).join("")}</div>
-  </div>`;
+  return `<div class="conf-parts">${parts.map(([k, v]) => {
+    const why = ((conf.part_reasons || {})[k] || []).join("; ");
+    return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${Math.round(v * 100)}%"></i><em>${Math.round(v * 100)}%</em></div>`;
+  }).join("")}</div>`;
 };
+
+let confModalEsc = null;
+
+function openConfidenceModal(conf, { auto = false, onDismiss } = {}) {
+  if (!conf) return;
+  closeConfidenceModal();
+  const overlay = document.createElement("div");
+  overlay.className = "conf-modal-overlay no-print";
+  overlay.id = "confModal";
+  overlay.innerHTML = `
+    <div class="conf-modal" role="dialog" aria-modal="true" aria-labelledby="confModalTitle">
+      <div class="conf-modal-head">
+        <h2 id="confModalTitle">Confidence</h2>
+        <button type="button" class="conf-modal-close" id="confModalClose" aria-label="Close">×</button>
+      </div>
+      <p class="conf-modal-overall">
+        <span class="conf-badge ${confLevel(conf.overall)}">overall ${Math.round(conf.overall * 100)}%</span>
+      </p>
+      ${confMetersHtml(conf)}
+      <p class="conf-modal-note">${esc(conf.disclaimer || "Scores flag uncertainty — not accuracy guarantees.")}</p>
+      <button type="button" class="primary" id="confModalOk">${auto ? "Got it" : "Close"}</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const dismiss = () => {
+    closeConfidenceModal();
+    onDismiss?.();
+  };
+  overlay.querySelector("#confModalClose").onclick = dismiss;
+  overlay.querySelector("#confModalOk").onclick = dismiss;
+  overlay.addEventListener("click", e => { if (e.target === overlay) dismiss(); });
+  confModalEsc = e => { if (e.key === "Escape") dismiss(); };
+  document.addEventListener("keydown", confModalEsc);
+}
+
+function closeConfidenceModal() {
+  if (confModalEsc) {
+    document.removeEventListener("keydown", confModalEsc);
+    confModalEsc = null;
+  }
+  document.getElementById("confModal")?.remove();
+}
 
 let timers = [];
 let cleanupFns = [];
@@ -113,6 +154,7 @@ function cleanup() {
   timers = [];
   cleanupFns.forEach(fn => fn());
   cleanupFns = [];
+  closeConfidenceModal();
   hidePlaybar();
 }
 
@@ -407,9 +449,8 @@ function showSong(job) {
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
         <span>Length <b>${fmtTime(r.duration)}</b></span>
         ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Source: ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
-        ${r.confidence ? confBadge("overall", r.confidence.overall, r.confidence.disclaimer) : ""}
+        ${r.confidence ? confOverallBtn(r.confidence.overall, r.confidence.disclaimer) : ""}
       </div>
-      ${r.confidence ? confMeters(r.confidence) : ""}
     </div>
     <div class="song-tools no-print">
       <div class="controls">
@@ -1534,4 +1575,13 @@ function showSong(job) {
   buildKeyboard();
   render();
   tick();
+
+  const confBtn = app.querySelector("#confOverall");
+  if (confBtn && r.confidence) {
+    const markSeen = () => store.set(`confModalSeen.${id}`, true);
+    confBtn.onclick = () => openConfidenceModal(r.confidence);
+    if (!store.get(`confModalSeen.${id}`, false)) {
+      openConfidenceModal(r.confidence, { auto: true, onDismiss: markSeen });
+    }
+  }
 }

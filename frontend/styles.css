@@ -177,15 +177,15 @@ body.has-playbar main { padding-bottom: 110px; }
   font: 600 11px var(--mono); padding: 2px 7px; border-radius: 4px; border: 1px dashed var(--line);
   letter-spacing: 0.02em;
 }
+button.conf-badge.conf-overall {
+  cursor: pointer; padding: 3px 9px; border-radius: 4px;
+  background: transparent; line-height: 1.3;
+}
+button.conf-badge.conf-overall:hover { filter: brightness(1.15); }
 .conf-badge.low { color: var(--danger); border-color: var(--danger); background: #2a1416; }
 .conf-badge.mid { color: var(--accent); border-color: var(--accent); background: #241e10; }
 .conf-badge.ok { color: var(--ok); border-color: #3a6b52; background: #142019; }
-.conf-panel {
-  flex: 1 1 100%; margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--line);
-  border-radius: 8px; background: var(--panel);
-}
-.conf-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-.conf-parts { display: grid; gap: 5px; }
+.conf-parts { display: grid; gap: 6px; }
 .conf-row { display: grid; grid-template-columns: 72px 1fr 40px; gap: 8px; align-items: center; font: 12px var(--mono); }
 .conf-row i { display: block; height: 6px; background: var(--muted); border-radius: 3px; max-width: 100%; }
 .conf-row.low i { background: var(--danger); }
@@ -193,6 +193,32 @@ body.has-playbar main { padding-bottom: 110px; }
 .conf-row.ok i { background: var(--ok); }
 .conf-row em { color: var(--muted); font-style: normal; text-align: right; }
 .section-label .conf-badge { margin-left: 10px; vertical-align: middle; }
+
+.conf-modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(8, 10, 14, 0.72);
+  backdrop-filter: blur(4px);
+}
+.conf-modal {
+  width: min(420px, 100%);
+  padding: 20px 22px 18px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+.conf-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 10px;
+}
+.conf-modal-head h2 { margin: 0; font-size: 18px; }
+.conf-modal-close {
+  width: 32px; height: 32px; padding: 0; border-radius: 8px;
+  font-size: 20px; line-height: 1; color: var(--muted);
+}
+.conf-modal-overall { margin: 0 0 14px; }
+.conf-modal-note { margin: 14px 0 16px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.conf-modal .primary { width: 100%; padding: 10px 14px; }
+.conf-modal .conf-parts { margin-top: 4px; }
 
 .song-tools {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
