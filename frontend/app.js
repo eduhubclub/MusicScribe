@@ -250,6 +250,8 @@ function syncSidebarChrome() {
   if (library) library.classList.toggle("on", onLibrary);
   if (upload) upload.classList.toggle("on", onHome);
   if (tabOwn) tabOwn.classList.toggle("on", onTabOwn);
+  // Library grid page already lists every song — hide the duplicate sidebar list.
+  document.body.classList.toggle("on-library-page", onLibrary);
   // Close the drawer after navigating on narrow screens
   if (window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
 }

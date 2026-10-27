@@ -474,6 +474,12 @@ html[data-theme="dark"] #sidebarTheme {
   text-transform: uppercase; color: var(--chrome-muted);
   padding: 0 8px;
 }
+/* #/library already shows the full grid — no duplicate song list in the rail */
+body.on-library-page .sidebar-lib,
+body.on-library-page .sidebar-list,
+body.on-library-page .sidebar-meta {
+  display: none !important;
+}
 .sidebar-list {
   flex: 1 1 auto; overflow: auto; padding: 8px 8px 12px;
   display: flex; flex-direction: column; gap: 4px;
