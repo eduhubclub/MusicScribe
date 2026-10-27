@@ -13,6 +13,8 @@
   --edu-blue-600: #2563eb;
   --edu-blue-700: #1d4ed8;
   --edu-nav-h: 56px;
+  /* Bottom chrome band (playbar + collapsed sidebar foot) */
+  --edu-playbar-h: 60px;
   --edu-border: 1.5px solid var(--edu-slate-300);
   --edu-border-thin: 0.5px solid var(--edu-slate-300);
 
@@ -167,6 +169,13 @@ body.has-playbar main { padding-bottom: 96px; }
   body.sidebar-collapsed .sidebar-foot {
     justify-content: center;
     padding: 8px 6px;
+  }
+  /* Same bottom band as the playbar (EduHub chrome alignment) */
+  body.sidebar-collapsed.has-playbar .sidebar-foot {
+    height: var(--edu-playbar-h);
+    min-height: var(--edu-playbar-h);
+    padding: 0 6px;
+    box-sizing: border-box;
   }
   body.sidebar-collapsed .sidebar-collapse {
     width: 28px;
@@ -348,11 +357,20 @@ body.has-sidebar .topbar .brand { display: none; }
 .playbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  min-height: var(--edu-playbar-h);
+  padding: 0 12px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
   background: var(--chrome-bg);
   color: var(--chrome-text);
   border-top: var(--edu-border);
   box-shadow: none;
+}
+@media (min-width: 901px) {
+  .playbar {
+    height: var(--edu-playbar-h);
+    flex-wrap: nowrap;
+  }
 }
 .playbar[hidden] { display: none !important; }
 .playbar .play-toggle {
