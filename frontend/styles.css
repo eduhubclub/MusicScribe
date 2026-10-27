@@ -127,25 +127,14 @@ body.has-playbar main { padding-bottom: 110px; }
   filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.5));
 }
 .wizard-track {
-  position: relative; height: 12px; margin: 28px 18px 6px;
+  height: 10px; margin: 22px 18px 6px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
-  overflow: visible;
+  overflow: hidden;
 }
 .wizard-track .fill {
   display: block; height: 100%; border-radius: inherit;
   background: linear-gradient(90deg, #c98a17, var(--accent));
   transition: width 0.45s ease;
-}
-.wizard-track .wizard-marker {
-  position: absolute; top: 50%; left: 0;
-  width: 52px; height: 52px;
-  transform: translate(-50%, -50%);
-  transition: left 0.45s ease;
-  pointer-events: none;
-}
-.wizard-track .wizard-marker img {
-  width: 100%; height: 100%; object-fit: contain;
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55));
 }
 .wizard-pct { font: 600 13px var(--mono); color: var(--muted); margin: 4px 0 0; }
 .upload-busy {
@@ -232,6 +221,12 @@ body.has-playbar main { padding-bottom: 110px; }
     0 0 0 1px rgba(0, 0, 0, 0.25),
     0 18px 40px rgba(0, 0, 0, 0.55),
     0 4px 10px rgba(0, 0, 0, 0.4);
+}
+.sheet-page .sheet-title {
+  margin: 0 0 18px; padding: 0 0 12px;
+  font: 700 22px/1.25 Inter, system-ui, sans-serif;
+  letter-spacing: -0.02em; color: var(--paper-ink);
+  border-bottom: 1px solid var(--paper-rule);
 }
 .sheet { font-family: var(--mono); font-size: 15px; color: var(--paper-ink); }
 .sheet-page .line { display: flex; flex-wrap: wrap; align-items: flex-end; margin: 0 0 14px; row-gap: 6px; }

@@ -314,11 +314,8 @@ function showProgress(job) {
            onerror="this.onerror=null;this.src='/assets/wizard-sax.png'">
       <h2 style="margin:0">${esc(job.title)}</h2>
       <p class="facts" style="margin:6px 0 0">${statusLine}</p>
-      <div class="wizard-track" aria-hidden="true">
+      <div class="wizard-track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
         <i class="fill" style="width:${pct}%"></i>
-        <span class="wizard-marker" style="left:${pct}%">
-          <img src="/assets/wizard-sax.png" alt="">
-        </span>
       </div>
       <p class="wizard-pct">${pct}%</p>
       <ul class="stages">
@@ -692,7 +689,7 @@ function showSong(job) {
     const bl = blocks();
     if (!bl.length) { view.innerHTML = `<p class="empty">No chords or lyrics were detected.</p>`; return; }
     const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
-    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet-page"><div class="sheet">`;
+    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet-page"><h2 class="sheet-title">${esc(job.title)}</h2><div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
         html += `<div class="instrumental">${b.measures.map(m =>
