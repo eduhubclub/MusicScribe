@@ -241,8 +241,35 @@ body.has-playbar main { padding-bottom: 110px; }
   font: 700 22px/1.25 Inter, system-ui, sans-serif;
   letter-spacing: -0.02em; color: var(--paper-ink);
   border-bottom: 1px solid var(--paper-rule);
+  outline: none; cursor: text; border-radius: 2px;
+}
+.sheet-page .sheet-title:hover { background: rgba(154, 78, 18, 0.06); }
+.sheet-page .sheet-title:focus {
+  box-shadow: 0 1px 0 var(--paper-chord);
+  background: rgba(255, 255, 255, 0.55);
 }
 .sheet { font-family: var(--mono); font-size: 15px; color: var(--paper-ink); }
+.sheet-page .chunk .c.editable {
+  cursor: text; min-width: 1.2ch; border-radius: 2px; padding: 0 1px;
+}
+.sheet-page .chunk .c.editable:hover {
+  background: rgba(154, 78, 18, 0.12); text-decoration: none;
+}
+.sheet-page .chunk .w {
+  cursor: text; border-bottom: 1px solid transparent;
+}
+.sheet-page .chunk .w:hover { border-bottom-color: var(--paper-rule); }
+.sheet-page .chunk .w[contenteditable="true"] {
+  background: #fff8e8; border-bottom-color: var(--paper-chord);
+  box-shadow: 0 0 0 1px rgba(154, 78, 18, 0.25);
+}
+.sheet-page .t-handle {
+  background: transparent;
+}
+.sheet-page .chunk:hover .t-handle,
+.sheet-page .chunk:focus-within .t-handle {
+  background: #cfc8b8;
+}
 .sheet-page .line { display: flex; flex-wrap: wrap; align-items: flex-end; margin: 0 0 14px; row-gap: 6px; }
 .line { display: flex; flex-wrap: wrap; align-items: flex-end; margin: 0 0 14px; row-gap: 6px; }
 .chunk { display: inline-flex; flex-direction: column; margin-right: .6ch; cursor: pointer; }
@@ -287,7 +314,11 @@ body.has-playbar main { padding-bottom: 110px; }
 .sheet-page .line.on .w { color: var(--paper-ink); }
 .chord-input { font: 600 15px var(--mono); width: 9ch; padding: 0 4px; background: #000; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; }
 .sheet-page .chord-input {
-  background: #fff; color: var(--paper-chord); border-color: var(--paper-chord);
+  font: 600 15px var(--mono); width: 8ch; min-width: 4ch;
+  padding: 0 3px; margin: 0; border-radius: 2px;
+  background: #fffdf6; color: var(--paper-chord);
+  border: 1px solid var(--paper-chord); outline: none;
+  box-shadow: 0 0 0 2px rgba(154, 78, 18, 0.15);
 }
 .hint { color: var(--muted); font-size: 13px; margin: -6px 0 16px; }
 .hint .warn { color: var(--danger); font-weight: 500; }

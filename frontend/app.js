@@ -691,7 +691,7 @@ function showSong(job) {
     const bl = blocks();
     if (!bl.length) { view.innerHTML = `<p class="empty">No chords or lyrics were detected.</p>`; return; }
     const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
-    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet-page"><h2 class="sheet-title">${esc(job.title)}</h2><div class="sheet">`;
+    let html = `<p class="hint no-print">Edit on the page: click a chord to rewrite it · double-click a lyric · drag edge handles (or Alt+←/→) for timing · click a word to jump${missing}</p><div class="sheet-page"><h2 class="sheet-title" id="sheetTitle" contenteditable="true" spellcheck="false" title="Edit title">${esc(job.title)}</h2><div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
         html += `<div class="instrumental">${b.measures.map(m =>
@@ -706,7 +706,7 @@ function showSong(job) {
           const label = c.chords.map(x => esc(show(x.name))).join(" ");
           const carry = c.chords.length && c.chords.every(x => x.carry) ? " carry" : "";
           const si = c.chords.length ? c.chords[0].si : "";
-          return `<span class="chunk" data-wi="${c.wi}"><span class="c editable${carry}" data-si="${si}">${label || " "}</span><span class="w-wrap"><i class="t-handle t-start no-print" title="Drag start · Alt+←/→ nudge 50ms"></i><span class="w">${esc(c.w.text)}</span><i class="t-handle t-end no-print" title="Drag end · Alt+←/→ nudge 50ms"></i></span></span>`;
+          return `<span class="chunk" data-wi="${c.wi}"><span class="c editable${carry}" data-si="${si}" title="Click to edit chord">${label || "·"}</span><span class="w-wrap"><i class="t-handle t-start no-print" title="Drag start · Alt+←/→ nudge 50ms"></i><span class="w" title="Click to jump · double-click to edit">${esc(c.w.text)}</span><i class="t-handle t-end no-print" title="Drag end · Alt+←/→ nudge 50ms"></i></span></span>`;
         }).join("") + `</div>`;
       }
     }
@@ -718,6 +718,23 @@ function showSong(job) {
       editLyrics(lyricsText());
     });
 
+    const sheetTitle = view.querySelector("#sheetTitle");
+    if (sheetTitle) {
+      sheetTitle.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); sheetTitle.blur(); }
+        if (e.key === "Escape") { sheetTitle.textContent = job.title; sheetTitle.blur(); }
+      });
+      sheetTitle.addEventListener("blur", () => {
+        const t = sheetTitle.textContent.replace(/\s+/g, " ").trim();
+        if (!t) { sheetTitle.textContent = job.title; return; }
+        if (t === job.title) return;
+        job.title = t;
+        const chromeTitle = app.querySelector("#title");
+        if (chromeTitle) chromeTitle.textContent = t;
+        api.rename(id, t).catch(() => {});
+      });
+    }
+
     view.querySelectorAll(".line").forEach(lineEl => {
       const ln = r.lyrics.lines[+lineEl.dataset.li];
       lineEl.querySelectorAll(".chunk").forEach(ch => {
@@ -725,14 +742,18 @@ function showSong(job) {
         const wEl = ch.querySelector(".w");
         words.push({ start: w.start, end: w.end, el: wEl, lineEl });
         wEl.onclick = () => { audio.currentTime = w.start; };
-        wEl.ondblclick = () => editWord(ln, w, wEl);
+        wEl.ondblclick = e => { e.preventDefault(); editWord(ln, w, wEl); };
         wEl.onkeydown = e => {
           if (!e.altKey) return;
           if (e.key === "ArrowLeft") { e.preventDefault(); nudgeWord(ln, w, -0.05); }
           if (e.key === "ArrowRight") { e.preventDefault(); nudgeWord(ln, w, 0.05); }
         };
         wEl.tabIndex = 0;
-        ch.querySelector(".c").onclick = e => editChord(e.currentTarget, w);
+        ch.querySelector(".c").onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          editChord(e.currentTarget, w);
+        };
         bindTimingHandle(ch.querySelector(".t-start"), ln, w, "start");
         bindTimingHandle(ch.querySelector(".t-end"), ln, w, "end");
       });
@@ -749,7 +770,9 @@ function showSong(job) {
     const si = cEl.dataset.si === "" ? null : +cEl.dataset.si;
     const input = document.createElement("input");
     input.className = "chord-input";
-    input.value = cEl.textContent.trim().split(" ")[0];
+    input.setAttribute("aria-label", "Edit chord");
+    const raw = cEl.textContent.trim();
+    input.value = raw === "·" ? "" : raw.split(" ")[0];
     cEl.replaceWith(input);
     input.focus();
     input.select();
@@ -760,7 +783,10 @@ function showSong(job) {
       if (commit) applyChordEdit(si, word, input.value.trim());
       render();
     };
-    input.onkeydown = e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+    input.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    };
     input.onblur = () => finish(true);
   }
 
