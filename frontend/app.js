@@ -92,6 +92,46 @@ const noteHz = (name, octave) => {
   const i = NOTE_NAMES.indexOf(name);
   return midiToHz((octave + 1) * 12 + i);
 };
+const TUNER_ICON = (paths) =>
+  `<span class="tuner-ico" aria-hidden="true"><svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></span>`;
+const TUNER_ICONS = {
+  // Classic guitar silhouette: body + neck + headstock
+  guitar: TUNER_ICON(`
+    <ellipse cx="12" cy="20" rx="7.5" ry="8"/><circle cx="12" cy="20" r="2.2"/>
+    <path d="M12 12V5.5"/><path d="M9.5 5.5h5"/><path d="M10.2 4.2v2.2M13.8 4.2v2.2"/>
+    <path d="M9.5 16.5h5M9.5 20h5M9.5 23.5h5"/>`),
+  // Longer bass body / thicker neck cue
+  bass: TUNER_ICON(`
+    <path d="M7 22c0-5 3.2-8.5 7-8.5s7 3.5 7 8.5c0 3.2-2 6-7 6s-7-2.8-7-6z"/>
+    <circle cx="14" cy="22" r="2.4"/><path d="M14 13.5V4.8"/><path d="M11.2 4.8h5.6"/>
+    <path d="M12 3.5v2.4M16 3.5v2.4"/><path d="M11 19h6M11 22.5h6"/>`),
+  // Small uke: squat body, short neck
+  ukulele: TUNER_ICON(`
+    <ellipse cx="16" cy="21" rx="6.2" ry="6.8"/><circle cx="16" cy="21" r="1.8"/>
+    <path d="M16 14.2V7.2"/><path d="M13.8 7.2h4.4"/><path d="M14.5 5.8v2.2M17.5 5.8v2.2"/>
+    <path d="M13.8 18.5h4.4M13.8 21.5h4.4"/>`),
+  // Mandolin: teardrop / bowl body
+  mandolin: TUNER_ICON(`
+    <path d="M16 28c-5.2 0-8.5-3.8-8.5-8.2 0-5.4 4.2-9.3 8.5-13.8 4.3 4.5 8.5 8.4 8.5 13.8 0 4.4-3.3 8.2-8.5 8.2z"/>
+    <circle cx="16" cy="20.5" r="2"/><path d="M16 12.5V6.5"/><path d="M13.8 6.5h4.4"/>
+    <path d="M14.4 5.2v2.2M17.6 5.2v2.2"/>`),
+  // Violin: f-holes + scroll cue
+  violin: TUNER_ICON(`
+    <path d="M11 26c-3.2-1.2-4.2-4.2-3.2-7.2 1.2-3.6 4.4-4.6 4.4-7.6V7.2h7.6v4c0 3 3.2 4 4.4 7.6 1 3-0.1 6-3.2 7.2"/>
+    <path d="M12.5 18.5c1.2 1.4 2.2 1.4 3.5 0M16 18.5c1.2 1.4 2.2 1.4 3.5 0"/>
+    <path d="M16 11.2V5.5"/><path d="M14 5.5c0-1.4 1-2.3 2-2.3s2 .9 2 2.3"/><circle cx="16" cy="20.2" r="1.5"/>`),
+  // Viola: similar, slightly wider body cue
+  viola: TUNER_ICON(`
+    <path d="M10.2 26.2c-3.5-1.1-4.6-4.4-3.4-7.6 1.3-3.5 4.6-4.4 4.6-7.4V7h9.2v4.2c0 3 3.3 3.9 4.6 7.4 1.2 3.2.1 6.5-3.4 7.6"/>
+    <path d="M12.2 18.2c1.3 1.5 2.5 1.5 3.8 0M16 18.2c1.3 1.5 2.5 1.5 3.8 0"/>
+    <path d="M16 11V5.2"/><path d="M13.8 5.2c0-1.5 1.1-2.4 2.2-2.4s2.2.9 2.2 2.4"/><circle cx="16" cy="20.5" r="1.7"/>`),
+  // Cello: taller body, endpin
+  cello: TUNER_ICON(`
+    <path d="M10.5 23.5c-3-1-4-4-3-7 1.2-3.4 4.2-4.2 4.2-7V6.5h9.6V9.5c0 2.8 3 3.6 4.2 7 1 3 0 6-3 7"/>
+    <path d="M12.5 16.8c1.2 1.4 2.3 1.4 3.5 0M16 16.8c1.2 1.4 2.3 1.4 3.5 0"/>
+    <path d="M16 9.5V4.8"/><path d="M14 4.8c0-1.3 1-2.1 2-2.1s2 .8 2 2.1"/>
+    <circle cx="16" cy="18.5" r="1.5"/><path d="M16 23.5v5.2"/>`),
+};
 const TUNER_INSTRUMENTS = [
   {
     id: "guitar",
@@ -556,14 +596,16 @@ function showTuner() {
         <h1>Tuner</h1>
         <p class="lede">Pick an instrument, then play a string — pitch is read from your microphone.</p>
       </header>
+      <div class="tuner-instrument" role="radiogroup" aria-label="Instrument">
+        ${TUNER_INSTRUMENTS.map(i => `
+          <button type="button" class="tuner-inst-btn${i.id === instrument.id ? " on" : ""}"
+            role="radio" aria-checked="${i.id === instrument.id ? "true" : "false"}"
+            data-id="${i.id}" title="${esc(i.label)}" aria-label="${esc(i.label)}">
+            ${TUNER_ICONS[i.id] || ""}
+            <span class="tuner-inst-label">${esc(i.label)}</span>
+          </button>`).join("")}
+      </div>
       <div class="tuner-panel" id="tunerPanel">
-        <label class="tuner-instrument">Instrument
-          <select id="tunerInstrument" aria-label="Instrument">
-            ${TUNER_INSTRUMENTS.map(i =>
-              `<option value="${i.id}" ${i.id === instrument.id ? "selected" : ""}>${esc(i.label)}</option>`
-            ).join("")}
-          </select>
-        </label>
         <div class="tuner-note" id="tunerNote">—</div>
         <div class="tuner-cents" id="tunerCents">Listen…</div>
         <div class="tuner-meter" aria-hidden="true">
@@ -591,7 +633,7 @@ function showTuner() {
   const statusEl = app.querySelector("#tunerStatus");
   const toggleBtn = app.querySelector("#tunerToggle");
   const stringsEl = app.querySelector("#tunerStrings");
-  const instrumentSel = app.querySelector("#tunerInstrument");
+  const instrumentGroup = app.querySelector(".tuner-instrument");
   const wave = app.querySelector("#tunerWave");
   const waveCtx = wave.getContext("2d");
 
@@ -665,9 +707,14 @@ function showTuner() {
     raf = requestAnimationFrame(tick);
   }
 
-  instrumentSel.onchange = () => {
-    instrument = TUNER_INSTRUMENTS.find(i => i.id === instrumentSel.value) || TUNER_INSTRUMENTS[0];
+  function selectInstrument(id) {
+    instrument = TUNER_INSTRUMENTS.find(i => i.id === id) || TUNER_INSTRUMENTS[0];
     store.set("tunerInstrument", instrument.id);
+    instrumentGroup.querySelectorAll(".tuner-inst-btn").forEach(btn => {
+      const on = btn.dataset.id === instrument.id;
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+    });
     renderStrings();
     highlightString(null);
     noteEl.textContent = "—";
@@ -678,7 +725,10 @@ function showTuner() {
     needleEl.classList.remove("in-tune");
     hzEl.textContent = "";
     smoothCents = 0;
-  };
+  }
+  instrumentGroup.querySelectorAll(".tuner-inst-btn").forEach(btn => {
+    btn.onclick = () => selectInstrument(btn.dataset.id);
+  });
   renderStrings();
 
   async function start() {

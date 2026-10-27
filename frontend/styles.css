@@ -251,8 +251,8 @@ select, input[type=text] {
 }
 
 /* Guitar tuner */
-.tuner-page { max-width: 640px; margin: 0 auto; }
-.tuner-head { margin: 0 0 22px; }
+.tuner-page { max-width: 720px; margin: 0 auto; }
+.tuner-head { margin: 0 0 16px; }
 .tuner-head h1 {
   margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: var(--text);
 }
@@ -265,14 +265,55 @@ select, input[type=text] {
   text-align: center;
 }
 .tuner-instrument {
-  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
-  width: min(280px, 100%);
-  font-size: 12px; font-weight: 600; color: var(--muted);
-  text-align: left;
-}
-.tuner-instrument select {
+  display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-start;
+  gap: 10px;
   width: 100%;
-  font-weight: 600; color: var(--text);
+  overflow-x: auto;
+  margin: 0 0 16px;
+  padding: 2px 0 6px;
+  scrollbar-width: thin;
+}
+.tuner-inst-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 6px;
+  width: 56px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chrome-muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  box-shadow: none;
+}
+.tuner-inst-btn .tuner-ico {
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px;
+  padding: 8px;
+  border-radius: 50%;
+  border: var(--edu-border);
+  background: var(--panel);
+  box-sizing: border-box;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.tuner-inst-btn:hover {
+  color: var(--edu-blue-600);
+}
+.tuner-inst-btn:hover .tuner-ico {
+  background: var(--chrome-hover);
+  border-color: var(--accent);
+}
+.tuner-inst-btn.on {
+  color: var(--edu-blue-700);
+}
+.tuner-inst-btn.on .tuner-ico {
+  border-color: var(--accent);
+  background: var(--edu-blue-50);
+}
+.tuner-inst-label {
+  font-size: 10px; font-weight: 700; line-height: 1.1;
+  letter-spacing: 0.01em;
+  max-width: 56px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tuner-note {
   font-size: 64px; font-weight: 700; letter-spacing: -0.03em;
