@@ -162,8 +162,82 @@ function route() {
   cleanup();
   const m = location.hash.match(/^#\/job\/(\w+)/);
   if (m) showJob(m[1]); else showLibrary();
+  refreshSidebar();
+  syncSidebarChrome();
 }
 window.addEventListener("hashchange", route);
+
+/* ---------------- Sidebar library ---------------- */
+
+function currentJobId() {
+  const m = location.hash.match(/^#\/job\/(\w+)/);
+  return m ? m[1] : null;
+}
+
+function setSidebarOpen(open) {
+  document.body.classList.toggle("sidebar-open", open);
+  const btn = document.getElementById("sidebarToggle");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (btn) btn.setAttribute("aria-label", open ? "Close library menu" : "Open library menu");
+  if (backdrop) backdrop.hidden = !open;
+}
+
+function syncSidebarChrome() {
+  const upload = document.getElementById("sidebarUpload");
+  if (upload) upload.classList.toggle("on", !currentJobId());
+  // Close the drawer after navigating on narrow screens
+  if (window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
+}
+
+async function refreshSidebar() {
+  const el = document.getElementById("sidebarJobs");
+  if (!el) return;
+  let jobs;
+  try { jobs = await api.list(); } catch {
+    el.innerHTML = `<p class="sidebar-empty">Couldn't load library.</p>`;
+    return;
+  }
+  if (!jobs.length) {
+    el.innerHTML = `<p class="sidebar-empty">No songs yet — use Upload to add one.</p>`;
+    return;
+  }
+  const active = currentJobId();
+  el.innerHTML = jobs.map(j => {
+    const busy = j.status === "running" || j.status === "queued";
+    const meta = busy
+      ? (j.stage_label || j.status)
+      : new Date(j.created * 1000).toLocaleDateString();
+    const on = j.id === active ? " on" : "";
+    return `<a class="sidebar-job${on}" href="#/job/${j.id}" title="${esc(j.title)}">
+      <span class="sidebar-title">${esc(j.title)}</span>
+      <span class="badge ${j.status}">${j.status === "done" ? "ready" : j.status}</span>
+      <span class="sidebar-meta">${esc(meta)}</span>
+    </a>`;
+  }).join("");
+  if (jobs.some(j => j.status === "running" || j.status === "queued")) {
+    timers.push(setTimeout(refreshSidebar, 2000));
+  }
+}
+
+function initSidebar() {
+  const toggle = document.getElementById("sidebarToggle");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  const upload = document.getElementById("sidebarUpload");
+  toggle?.addEventListener("click", () => {
+    setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+  });
+  backdrop?.addEventListener("click", () => setSidebarOpen(false));
+  upload?.addEventListener("click", () => {
+    if (location.hash === "#/" || location.hash === "" || location.hash === "#") {
+      syncSidebarChrome();
+    }
+  });
+  refreshSidebar();
+  syncSidebarChrome();
+}
+
+initSidebar();
 route();
 
 /* ---------------- Home (upload-first) ---------------- */
@@ -293,6 +367,7 @@ function showLibrary() {
 
 async function refreshList() {
   const el = document.getElementById("jobs");
+  refreshSidebar();
   if (!el) return;
   let jobs;
   try { jobs = await api.list(); } catch { return; }
@@ -317,6 +392,7 @@ async function refreshList() {
       if (btn.dataset.armed) {
         await api.del(btn.dataset.del).catch(() => {});
         refreshList();
+        refreshSidebar();
       } else {
         btn.dataset.armed = "1";
         btn.textContent = "Confirm?";

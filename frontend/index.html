@@ -8,11 +8,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <header class="topbar">
-    <a href="#/" class="brand" title="Home"><span class="brand-mark">♪</span> MusicScribe</a>
-  </header>
-  <main id="app"></main>
+<body class="has-sidebar">
+  <aside id="sidebar" class="sidebar no-print" aria-label="Library">
+    <div class="sidebar-head">
+      <span class="sidebar-label">Library</span>
+      <a class="sidebar-upload" href="#/" id="sidebarUpload" title="Upload a new song">Upload</a>
+    </div>
+    <div class="sidebar-list" id="sidebarJobs" role="navigation" aria-label="Songs on this device">
+      <p class="sidebar-empty">Loading…</p>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop no-print" id="sidebarBackdrop" hidden></div>
+  <div class="shell">
+    <header class="topbar">
+      <button type="button" class="sidebar-toggle no-print" id="sidebarToggle" aria-label="Open library menu" aria-controls="sidebar" aria-expanded="false">☰</button>
+      <a href="#/" class="brand" title="Home"><span class="brand-mark">♪</span> MusicScribe</a>
+    </header>
+    <main id="app"></main>
+  </div>
   <footer id="playbar" class="playbar" hidden></footer>
   <script src="chords.js"></script>
   <script src="local-store.js"></script>
