@@ -1068,7 +1068,7 @@ function showSong(job) {
       bindSheetTitle();
       return;
     }
-    const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
+    const missingHint = r.lyrics.reference ? "" : `lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
     let body = `<div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
@@ -1089,9 +1089,7 @@ function showSong(job) {
       }
     }
     body += `</div>`;
-    view.innerHTML = paperHtml(body, {
-      hint: `Edit on the page: click a chord to rewrite it · double-click a lyric · drag edge handles (or Alt+←/→) for timing · click a word to jump${missing}`,
-    });
+    view.innerHTML = paperHtml(body, { hint: missingHint });
     bindSheetTitle();
     view.querySelector("#pasteLink")?.addEventListener("click", e => {
       e.preventDefault();
