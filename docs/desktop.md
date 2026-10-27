@@ -20,7 +20,15 @@ existing UI and a localhost-only Python helper. Songs never leave the machine.
 
 ## Build & release
 
-See [`desktop/README.md`](../desktop/README.md) and
-[`.github/workflows/desktop-release.yml`](../.github/workflows/desktop-release.yml).
+| Target | Where to build | Commands | Artifact |
+|---|---|---|---|
+| macOS `.dmg` | macOS host (iMac / `macos-latest`) | `./scripts/build-sidecar.sh` then `./scripts/build-desktop.sh` | `desktop/dist/*.dmg` |
+| Windows NSIS | Windows host (`windows-latest`) | `.\scripts\build-sidecar.ps1` then `.\scripts\build-desktop.ps1` | `desktop/dist/*.exe` |
 
-Tag a release (`v0.1.0`) to build `.dmg` and NSIS `.exe` on GitHub-hosted runners.
+Full step-by-step: [`desktop/README.md`](../desktop/README.md).
+
+Tag a release (`v0.1.0`) or run **Desktop release** via `workflow_dispatch` to build on
+GitHub-hosted runners (see [`.github/workflows/desktop-release.yml`](../.github/workflows/desktop-release.yml)).
+
+A Linux cloud agent cannot emit a signed (or generally usable) macOS `.dmg`; use a Mac or the
+macOS CI job.

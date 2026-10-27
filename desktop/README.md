@@ -35,22 +35,52 @@ The helper never binds `0.0.0.0`. Jobs stay ephemeral by default.
   - macOS: `~/Library/Application Support/MusicScribe/models`
   - Windows: `%LOCALAPPDATA%\MusicScribe\models`
 
-## Build installers
+## Build a macOS `.dmg` (run on a Mac)
 
-Build the sidecar on the **same OS** as the target, then package:
+Linux/cloud VMs **cannot** produce a usable macOS `.dmg`. Build on macOS (iMac / MacBook / `macos-latest` CI).
+
+### Prerequisites
 
 ```bash
-# macOS
-./scripts/build-sidecar.sh
-./scripts/build-desktop.sh   # → .dmg
-
-# Windows (PowerShell)
-.\scripts\build-sidecar.ps1
-.\scripts\build-desktop.ps1  # → NSIS .exe (+ portable)
+brew install git python@3.12 node@20 ffmpeg
+# Node 20+ on PATH (brew link node@20 if needed)
 ```
 
-GitHub Actions (`.github/workflows/desktop-release.yml`) builds **macos-latest** and
-**windows-latest** on version tags (`v*`) and attaches artifacts to the release.
+### One-shot build
 
-This Linux/cloud VM cannot produce signed macOS `.dmg` or Windows NSIS installers;
-use the workflow for those artifacts.
+```bash
+cd ~/MusicScribe   # or your clone
+git pull origin main
+./setup.sh
+cd desktop && npm ci && cd ..
+./scripts/build-sidecar.sh    # PyInstaller → desktop/sidecar/
+./scripts/build-desktop.sh    # electron-builder --mac → desktop/dist/*.dmg
+```
+
+### Artifacts
+
+| Output | Path |
+|---|---|
+| Sidecar onedir | `desktop/sidecar/` (`music-scribe-helper` + `_internal/`) |
+| Installers | `desktop/dist/Music Scribe-*.dmg` (arm64 + x64 when built on Apple Silicon with default config) |
+
+Open the `.dmg`, drag **Music Scribe** to Applications. First launch downloads models into
+`~/Library/Application Support/MusicScribe/models`.
+
+**Signing:** `desktop/package.json` sets `"identity": null` (ad-hoc / unsigned). On a pilot Mac,
+right-click → **Open** the first time if Gatekeeper blocks it. Apple notarization is a follow-up
+once a Developer ID cert exists.
+
+### Windows (for reference)
+
+```powershell
+.\setup.ps1
+cd desktop; npm ci; cd ..
+.\scripts\build-sidecar.ps1
+.\scripts\build-desktop.ps1   # → desktop/dist/*.exe
+```
+
+### CI release
+
+GitHub Actions (`.github/workflows/desktop-release.yml`) builds **macos-latest** and
+**windows-latest** on version tags (`v*`) or `workflow_dispatch`, and uploads the artifacts.
