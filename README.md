@@ -1,250 +1,167 @@
-# Bandscribe
+# Music Scribe
 
-Made a song with AI (Suno, Udio, …) and want to actually play it? Bandscribe listens to the
-track and writes out a part for every instrument: a chord sheet with lyrics, guitar and bass
-tabs, piano, drums and the vocal melody. Everything runs on your own computer, with no
-accounts and no uploads.
+Turn a song into playable parts — chord sheet with lyrics, guitar and bass tabs, piano,
+drums, and melody. Everything runs on **your computer**. No accounts. No cloud uploads.
 
-## Privacy (browser-local)
+## Download the app (macOS & Windows)
 
-**Your songs never go to a Music Scribe / Bandscribe cloud.** There are no accounts and no
-remote job store. You pick a file in the browser; the page talks only to a **localhost**
-helper (`127.0.0.1`). Job audio/results default to an **ephemeral** temp folder that is wiped
-when the helper starts and when you click **Clear local data** — not a durable hosted library.
+**This is the primary way to use Music Scribe.**
 
-Honest limit: Demucs / Whisper / Basic Pitch still need that local Python helper today. They
-do **not** all run inside the browser tab yet. See
+| Platform | Installer |
+|---|---|
+| **macOS** (Apple Silicon + Intel) | [GitHub Releases](https://github.com/thomaseccles67/MusicScribe/releases) → `.dmg` |
+| **Windows** 10/11 (x64) | [GitHub Releases](https://github.com/thomaseccles67/MusicScribe/releases) → NSIS `.exe` |
+
+1. Download the installer for your OS from the latest
+   [Release](https://github.com/thomaseccles67/MusicScribe/releases).
+2. Open Music Scribe (double-click). A short splash appears while the local engine starts.
+3. On first launch, the app downloads AI models into a folder on your machine (not into the
+   installer), then you’re ready to drop in a song.
+
+| OS | Model cache |
+|---|---|
+| macOS | `~/Library/Application Support/MusicScribe/` |
+| Windows | `%LOCALAPPDATA%\MusicScribe\` |
+
+Your songs never leave this computer. The helper listens on `127.0.0.1` only. Job files are
+**ephemeral** by default (cleared when the engine starts and via **Clear local data**).
+
+Desktop packaging details: [`docs/desktop.md`](docs/desktop.md) · [`desktop/README.md`](desktop/README.md).
+
+> Automatic transcription is a solid first draft, not a perfect score. Edit chords and lyrics
+> in place; check tabs by ear.
+
+### What you get
+
+- **Chord sheet** with lyrics and section headings (paste Suno lyrics to time them).
+- **Guitar / bass tab** in any tuning or capo; Drop-D style suggestions when they fit.
+- **Piano** roll + live keyboard for the current chord.
+- **Drums** on a 16th-note grid; **melody** with lyrics underneath.
+- Chord diagrams, transpose, **MIDI** and **PDF** export, play-along highlighting.
+
+## Privacy
+
+**Songs never go to a Music Scribe cloud.** There are no accounts and no remote job store.
+The page talks only to a **localhost** helper (`127.0.0.1`). See
 [`docs/browser-local-architecture.md`](docs/browser-local-architecture.md).
 
-- **Chord sheet:** chords placed over the lyrics, with section headings. Paste your own lyrics
-  (Suno gives you them) and they're timed to the song.
-- **Guitar tab:** playable fingerings in any tuning (half step down, Drop D, DADGAD, …) and
-  with a capo. If the chords look like open shapes in a down-tuning, Bandscribe suggests it.
-- **Bass tab:** 4-string tab that follows the band's tuning.
-- **Piano:** a scrolling piano roll of the keys part, plus a **live keyboard** that shows the
-  chord to play right now (voice-led, bass note in the left hand), the next chord, and the
-  notes the piano track is playing.
-- **Drums:** drum tab (kick, snare, hi-hat, crash) on a 16th-note grid.
-- **Melody:** the sung line as notes with the lyrics underneath, playable on any instrument.
-- **Chord diagrams** for guitar, ukulele and piano. Transpose to any key.
-- **MIDI export** for any part, or all of them, for MuseScore (sheet music) or your DAW.
-- **Play along:** the page follows the song, highlights the current word, chord and bar, and
-  lets you listen to the full mix or any single instrument.
+Honest limit: Demucs / Whisper / Basic Pitch still need that local Python helper (bundled in
+the desktop app). They do not all run inside a plain browser tab yet.
 
-> Automatic transcription gives you a solid first draft, not a perfect score. Chords and lyrics
-> are editable in place; check tabs by ear.
+---
 
-## Install
+## Developers: run from source
 
-You don't need to know git or Python. Copy each command below, paste it into the terminal
-window, and press **Enter**. Installing takes 5–15 minutes and about 5 GB of disk space.
+Use this path if you are hacking on Music Scribe. Day-to-day users should
+[download the app](#download-the-app-macos--windows) instead.
 
-### Windows 10 / 11
+### Desktop shell (Electron, recommended for UI work)
 
-**1. Open PowerShell.** Press the **Start** button, type `PowerShell`, and press **Enter**.
-A window with a blue or black background opens. You'll paste the commands there
-with **Ctrl+V** or a right-click.
+```bash
+./setup.sh                  # or .\setup.ps1 on Windows
+cd desktop && npm install && npm run dev
+```
 
-**2. Install the three tools Bandscribe needs** (Git, Python and ffmpeg). Paste these one at a
-time. If Windows asks for permission, click **Yes**.
+Spawns the venv helper on `127.0.0.1`, shows a splash while it boots, then loads `frontend/`.
+
+### CLI helper only (browser)
+
+#### Windows 10 / 11
 
 ```powershell
 winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements
-```
-```powershell
 winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements
-```
-```powershell
 winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements
 ```
 
-**3. Close PowerShell and open it again** (same as step 1), so it can find the tools you just installed.
-
-**4. Download Bandscribe and set it up.** Paste these one at a time:
+Close and reopen PowerShell, then:
 
 ```powershell
 cd $HOME
-```
-```powershell
-git clone https://github.com/skipzx-lab/bandscribe.git
-```
-```powershell
-cd bandscribe
-```
-```powershell
+git clone https://github.com/thomaseccles67/MusicScribe.git
+cd MusicScribe
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
-```
-
-Setup finds your graphics card and installs everything to match. It's done when you see
-**Done** in green.
-
-**5. Start it:**
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
-Your browser opens Bandscribe at http://localhost:8765. Leave the PowerShell window open while
-you use it. To stop Bandscribe, click that window and press **Ctrl+C**.
+Browser opens http://localhost:8765. Leave PowerShell open; **Ctrl+C** stops the helper.
 
-**Next time**, open PowerShell and paste:
-
-```powershell
-cd $HOME\bandscribe; powershell -ExecutionPolicy Bypass -File .\run.ps1
-```
-
-### macOS
-
-**1. Open Terminal.** Press **Cmd+Space**, type `Terminal`, and press **Enter**.
-
-**2. Install Homebrew** (a free installer for tools like these). Skip this if you already have it.
-It asks for your Mac password; nothing appears while you type it, which is normal. When it
-finishes, run the two `echo`/`eval` lines it prints under "Next steps".
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-**3. Install Git, Python and ffmpeg:**
+#### macOS
 
 ```bash
 brew install git python@3.12 ffmpeg
+cd ~ && git clone https://github.com/thomaseccles67/MusicScribe.git && cd MusicScribe
+./setup.sh && ./run.sh
 ```
 
-**4. Download Bandscribe, set it up and start it.** Paste these one at a time:
-
-```bash
-cd ~
-```
-```bash
-git clone https://github.com/skipzx-lab/bandscribe.git
-```
-```bash
-cd bandscribe
-```
-```bash
-./setup.sh
-```
-```bash
-./run.sh
-```
-
-Your browser opens Bandscribe at http://localhost:8765. Leave Terminal open while you use it,
-and press **Ctrl+C** in it to stop. **Next time:** `cd ~/bandscribe && ./run.sh`
-
-### Linux (Ubuntu 24.04)
+#### Linux (Ubuntu 24.04)
 
 ```bash
 sudo apt update && sudo apt install -y git python3 python3-venv ffmpeg
-```
-```bash
-cd ~ && git clone https://github.com/skipzx-lab/bandscribe.git && cd bandscribe
-```
-```bash
-./setup.sh
-```
-```bash
-./run.sh
+cd ~ && git clone https://github.com/thomaseccles67/MusicScribe.git && cd MusicScribe
+./setup.sh && ./run.sh
 ```
 
-Other distributions work too, as long as the `python3.12` or `python3.11` command exists.
-Setup doesn't use newer Pythons yet. On Ubuntu 22.04, install it first with
-`sudo apt install -y python3.11 python3.11-venv`. Elsewhere, install Python 3.12 with your
-package manager, [pyenv](https://github.com/pyenv/pyenv) or [uv](https://docs.astral.sh/uv/).
-
-### Updating to the latest version
-
-Open the terminal, go into the folder, pull the changes and run setup again:
+### Updating (developers)
 
 ```powershell
-cd $HOME\bandscribe; git pull; powershell -ExecutionPolicy Bypass -File .\setup.ps1
+cd $HOME\MusicScribe; git pull; powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 ```bash
-cd ~/bandscribe && git pull && ./setup.sh
+cd ~/MusicScribe && git pull && ./setup.sh
 ```
 
-(The first is for Windows, the second for macOS and Linux.) Songs are **not** kept by default —
-ephemeral local jobs are wiped on helper restart. Set `BANDSCRIBE_KEEP_JOBS=1` only if you
-explicitly want durable local disk jobs on your machine (still never uploaded).
+Ephemeral jobs are wiped on helper restart. Set `BANDSCRIBE_KEEP_JOBS=1` only if you want
+durable **local** disk jobs (still never uploaded).
 
-### Without git
+### Tests
 
-On this page, click the green **Code** button, then **Download ZIP**, and unzip it. On
-Windows, open the unzipped folder, click the address bar, type `powershell` and press
-**Enter**. That opens PowerShell inside the folder. Then do steps 2–3 above, skip the `git`
-and `cd` commands in step 4, and continue with `setup.ps1`. To update, download the ZIP
-again. There is no durable song library to migrate by default.
-
-### If something goes wrong
-
-- **"winget is not recognized":** update **App Installer** from the Microsoft Store, then try again.
-- **"py is not recognized" or "Python 3.12 or 3.11 is required":** close and reopen PowerShell
-  (step 3). If it still fails, install Python from https://www.python.org/downloads/ and tick
-  **"Add python.exe to PATH"** in the installer.
-- **"ffmpeg was not found":** close and reopen the terminal, then run the start command again.
-- **Choosing the GPU yourself:** setup picks automatically. To override it, add `-Gpu cuda`,
-  `-Gpu rocm`, `-Gpu xpu` or `-Gpu cpu` to the setup command on Windows, or pass `cuda`,
-  `rocm`, `xpu`, `mps` or `cpu` to `./setup.sh`.
-- **Graphics drivers:** for GPU speed, keep your NVIDIA, AMD (26.2.2 or newer) or Intel Arc
-  driver up to date.
-
-The first song takes a few extra minutes while the AI models download.
+```bash
+PYTHONPATH=backend python -m unittest backend.tests.test_chords_accuracy -v
+PYTHONPATH=backend python -m unittest backend.tests.test_paths backend.tests.test_models_status -v
+```
 
 ### Hardware
 
-Everything works on the CPU. A GPU speeds up stem separation (the slowest step), and on
-NVIDIA the lyrics too.
+Everything works on the CPU. A GPU speeds up stem separation (and lyrics on NVIDIA).
 
 | Hardware | Stem separation | Lyrics |
 |---|---|---|
 | NVIDIA RTX 20-series and newer | GPU (CUDA 12.8) | GPU |
-| AMD Radeon RX 7000/9000, Ryzen AI Max 300, selected Ryzen AI 300/400 | GPU (ROCm; Windows needs Python 3.12 and driver 26.2.2+) | CPU |
-| Intel Arc, including Core Ultra integrated graphics | GPU (XPU) | CPU |
+| AMD Radeon RX 7000/9000, Ryzen AI Max 300, selected Ryzen AI 300/400 | GPU (ROCm) | CPU |
+| Intel Arc, including Core Ultra iGPU | GPU (XPU) | CPU |
 | Apple silicon | GPU (MPS) | CPU |
-| Anything else (older iGPUs, Radeon 780M on Windows, …) | CPU | CPU |
+| Anything else | CPU | CPU |
 
-If a GPU build doesn't support your card, setup installs the CPU build instead.
-
-## Tests
-
-Chord recognition (synthetic audio, no model downloads):
-
-```bash
-PYTHONPATH=backend python -m unittest backend.tests.test_chords_accuracy -v
-```
-
-Requires the Python deps from `requirements.txt` (at least `numpy`, `scipy`, `librosa`).
-
-## How it works
-
-1. **Demucs** (`htdemucs_6s`) splits the song into vocals, guitar, bass, piano, drums and other.
-2. **librosa** tracks the beat; bars come from where chords change.
-3. **Chords:** chroma templates with bass-note weighting and a key prior, smoothed with an HMM,
-   one decision per beat.
-4. **Lyrics:** faster-whisper on the vocal stem, or your pasted lyrics aligned to its word timings.
-5. **Notes:** Spotify's **Basic Pitch** on each stem (guitar, bass, piano, vocals).
-6. **Tabs:** a Viterbi search picks string/fret positions that are playable and keep the hand still.
-7. **Drums:** onsets in the kick, snare and cymbal frequency bands of the drum stem.
-
-Songs, stems and results are stored in `data/` next to the app (set `BANDSCRIBE_DATA` to move it).
-
-## Settings
+### Settings
 
 | Variable | Effect |
 |---|---|
-| `BANDSCRIBE_DATA` | Where songs and results are stored |
-| `BANDSCRIBE_DEVICE` | Force the separation device: `cuda`, `xpu`, `mps` or `cpu` |
-| `BANDSCRIBE_WHISPER_DEVICE` | Force the lyrics device: `cuda` or `cpu` |
+| `BANDSCRIBE_DATA` | Where songs and results are stored (opts out of ephemeral default) |
+| `BANDSCRIBE_KEEP_JOBS` | `1` to keep durable local jobs |
+| `BANDSCRIBE_DEVICE` | Force separation device: `cuda`, `xpu`, `mps`, `cpu` |
+| `BANDSCRIBE_WHISPER_DEVICE` | Force lyrics device: `cuda` or `cpu` |
+| `MUSICSCRIBE_USER_DATA` | Override Application Support / LocalAppData root |
+| `MUSICSCRIBE_MODEL_CACHE` | Override model weight cache directory |
 
-The server listens on `127.0.0.1` only and has no login. Don't expose it to a network you don't trust.
+The server listens on `127.0.0.1` only and has no login.
+
+### How it works
+
+1. **Demucs** (`htdemucs_6s`) splits the song into stems.
+2. **librosa** tracks the beat; bars follow chord changes.
+3. **Chords** via chroma templates + HMM; **lyrics** via faster-whisper (or pasted text).
+4. **Notes** via Basic Pitch; **tabs** via Viterbi; **drums** via onset bands.
 
 ## Credits
 
-Built on [Demucs](https://github.com/facebookresearch/demucs) (MIT),
-[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT) with OpenAI Whisper (MIT),
-[Basic Pitch](https://github.com/spotify/basic-pitch) (Apache-2.0),
-[librosa](https://github.com/librosa/librosa) (ISC), [pretty_midi](https://github.com/craffel/pretty-midi) (MIT)
-and [FastAPI](https://github.com/fastapi/fastapi) (MIT).
+Built on [Demucs](https://github.com/facebookresearch/demucs),
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper),
+[Basic Pitch](https://github.com/spotify/basic-pitch),
+[librosa](https://github.com/librosa/librosa), [pretty_midi](https://github.com/craffel/pretty-midi),
+[FastAPI](https://github.com/fastapi/fastapi), and [Electron](https://www.electronjs.org/).
+
+Forked from upstream [Bandscribe](https://github.com/skipzx-lab/bandscribe).
 
 Only transcribe music you have the right to use.
 

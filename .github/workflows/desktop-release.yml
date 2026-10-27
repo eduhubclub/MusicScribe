@@ -1,0 +1,121 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            sidecar_script: scripts/build-sidecar.sh
+            desktop_script: scripts/build-desktop.sh
+            artifact_glob: desktop/dist/*.dmg
+          - os: windows-latest
+            sidecar_script: scripts/build-sidecar.ps1
+            desktop_script: scripts/build-desktop.ps1
+            artifact_glob: desktop/dist/*.{exe,yml}
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install system ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Install system ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y
+
+      - name: Create venv and install Python deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install -U pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install --no-deps basic-pitch==0.4.0
+          pip install pyinstaller
+
+      - name: Create venv and install Python deps (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          py -3.12 -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -U pip
+          .\.venv\Scripts\pip.exe install torch --index-url https://download.pytorch.org/whl/cpu
+          .\.venv\Scripts\pip.exe install -r requirements.txt
+          .\.venv\Scripts\pip.exe install --no-deps basic-pitch==0.4.0
+          .\.venv\Scripts\pip.exe install pyinstaller
+
+      - name: Build PyInstaller sidecar (macOS)
+        if: runner.os == 'macOS'
+        run: bash scripts/build-sidecar.sh
+
+      - name: Build PyInstaller sidecar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\build-sidecar.ps1
+
+      - name: Install Electron deps
+        working-directory: desktop
+        run: npm install
+
+      - name: Build desktop installer (macOS)
+        if: runner.os == 'macOS'
+        run: bash scripts/build-desktop.sh
+        env:
+          # Unsigned initially; notarization is a follow-up when certs exist.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Build desktop installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\build-desktop.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-scribe-${{ matrix.os }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.exe
+            desktop/dist/*.blockmap
+            desktop/dist/latest*.yml
+          if-no-files-found: warn
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/dist/*.dmg
+            desktop/dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

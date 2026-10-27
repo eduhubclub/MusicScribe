@@ -8,3 +8,12 @@ data/
 
 # Logs
 *.log
+
+# Desktop / Electron / PyInstaller
+desktop/node_modules/
+desktop/dist/
+desktop/sidecar/*
+!desktop/sidecar/README.md
+sidecar/dist/
+sidecar/build/
+*.spec.bak
