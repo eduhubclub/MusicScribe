@@ -393,6 +393,7 @@ button.on { border-color: var(--accent); color: var(--accent); }
   .chunk .w.on, .sheet-page .chunk .w.on { background: none; color: #000; }
   .song-head { margin-bottom: 8px; page-break-after: avoid; }
   .song-head h1 { color: #000; font-size: 20pt; }
+  .sheet-page .sheet-title { color: #000; border-bottom-color: #ccc; font-size: 16pt; }
   .facts, .facts b { color: #333; }
   .sheet, .tabwrap { font-size: 10pt; }
   .tabrow { page-break-inside: avoid; margin-bottom: 10pt; }
