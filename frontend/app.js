@@ -265,6 +265,44 @@ function initSidebar() {
   syncSidebarChrome();
 }
 
+let splashTimer = null;
+let splashRemoveTimer = null;
+
+function dismissSplash() {
+  const el = document.getElementById("splash");
+  if (!el || el.dataset.done === "1") return;
+  el.dataset.done = "1";
+  if (splashTimer) { clearTimeout(splashTimer); splashTimer = null; }
+  el.classList.add("splash-out");
+  document.body.classList.remove("splash-active");
+  const btn = document.getElementById("splashContinue");
+  btn?.setAttribute("aria-hidden", "true");
+  // Keep outside route() cleanup timers so hash navigation doesn't yank the fade.
+  if (splashRemoveTimer) clearTimeout(splashRemoveTimer);
+  splashRemoveTimer = setTimeout(() => el.remove(), 500);
+}
+
+function initSplash() {
+  const el = document.getElementById("splash");
+  const btn = document.getElementById("splashContinue");
+  if (!el) {
+    document.body.classList.remove("splash-active");
+    return;
+  }
+  const go = () => dismissSplash();
+  btn?.addEventListener("click", go);
+  el.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+      e.preventDefault();
+      go();
+    }
+  });
+  // Brief hold, then fade into home/library (tap/click also continues).
+  splashTimer = setTimeout(go, 1800);
+  btn?.focus({ preventScroll: true });
+}
+
+initSplash();
 initSidebar();
 route();
 

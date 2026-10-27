@@ -8,7 +8,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="has-sidebar">
+<body class="has-sidebar splash-active">
+  <div id="splash" class="splash no-print" role="dialog" aria-label="MusicScribe" aria-modal="true">
+    <button type="button" class="splash-continue" id="splashContinue" title="Continue">
+      <img class="splash-wizard" src="/assets/wizard-sax.png" alt="" width="180" height="210"
+           onerror="this.onerror=null;this.src='/assets/wizard-sax.webp'">
+      <span class="splash-title">MusicScribe</span>
+    </button>
+  </div>
   <aside id="sidebar" class="sidebar no-print" aria-label="Library">
     <div class="sidebar-brand">
       <a href="#/" class="brand" title="Home">

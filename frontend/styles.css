@@ -50,6 +50,67 @@ html, body {
 }
 a { color: inherit; }
 button, select, input { font: inherit; color: inherit; }
+
+/* App-open splash — wizard + wordmark, centered on chrome surface */
+.splash {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--chrome-bg);
+  color: var(--chrome-text);
+  transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+.splash.splash-out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.splash-continue {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px;
+  margin: 0; padding: 28px 24px;
+  border: 0 none transparent;
+  border-radius: 0;
+  background: transparent;
+  background-color: transparent;
+  color: inherit;
+  box-shadow: none;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.splash-continue:hover,
+.splash-continue:focus {
+  background: transparent;
+  background-color: transparent;
+  border: 0 none transparent;
+  box-shadow: none;
+  outline: none;
+}
+.splash-wizard {
+  width: min(200px, 46vw);
+  height: auto;
+  aspect-ratio: 480 / 560;
+  object-fit: contain;
+  display: block;
+  /* Asset is light line art — blacken for white chrome (same as collapsed rail) */
+  filter: brightness(0);
+  image-rendering: auto;
+}
+.splash-title {
+  font-weight: 700;
+  font-size: clamp(1.5rem, 4vw, 1.875rem);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--chrome-text);
+}
+body.splash-active { overflow: hidden; }
+body.splash-active .sidebar,
+body.splash-active .shell,
+body.splash-active .playbar {
+  /* Keep layout under splash; hide from interaction/AT while covering */
+  visibility: hidden;
+}
 button {
   background: var(--panel); border: var(--edu-border); border-radius: 12px;
   padding: 8px 14px; cursor: pointer; color: var(--text);
