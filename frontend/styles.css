@@ -70,7 +70,7 @@ body.has-playbar main { padding-bottom: 110px; }
   box-shadow: 4px 0 18px rgba(0, 0, 0, 0.06);
 }
 .sidebar-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px;
   padding: 16px 14px 12px;
   border-bottom: 1px solid var(--chrome-line);
   flex: 0 0 auto;
@@ -79,15 +79,26 @@ body.has-playbar main { padding-bottom: 110px; }
   font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--chrome-muted);
 }
-.sidebar-upload {
+.sidebar-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sidebar-upload, .sidebar-tabown {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 6px 12px; border-radius: 8px; text-decoration: none;
   font-size: 13px; font-weight: 600;
-  background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent);
+  border: 1px solid var(--accent);
+}
+.sidebar-upload {
+  background: var(--accent); color: var(--accent-ink);
 }
 .sidebar-upload:hover { filter: brightness(1.06); }
 .sidebar-upload.on {
-  background: transparent; color: var(--accent); border-color: var(--accent); border-style: dashed;
+  background: transparent; color: var(--accent); border-style: dashed;
+}
+.sidebar-tabown {
+  background: var(--panel); color: var(--accent);
+}
+.sidebar-tabown:hover { background: var(--chrome-active); }
+.sidebar-tabown.on {
+  background: var(--chrome-active); border-style: solid;
 }
 .sidebar-list {
   flex: 1 1 auto; overflow: auto; padding: 10px 8px 16px;
@@ -183,7 +194,31 @@ body.has-sidebar .playbar { left: var(--sidebar-w); }
   min-width: 140px;
   background: #fff; color: var(--chrome-text); border-color: var(--chrome-line);
 }
+.playbar .playbar-note {
+  flex: 1 1 220px; font-size: 13px; color: var(--chrome-muted); line-height: 1.35;
+}
 .playbar audio { display: none; }
+
+/* Tab your own */
+.tabown-hero {
+  max-width: 720px; margin: 0 auto;
+  padding: 28px 24px 32px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: calc(var(--radius) + 2px);
+}
+.tabown-hero h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.02em; }
+.tabown-hero .lede { color: var(--muted); margin: 0 0 22px; max-width: 520px; }
+.tabown-field {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 0 0 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.tabown-field input[type=text] { font-weight: 500; }
+.tabown-lyrics {
+  width: 100%; min-height: 280px; resize: vertical; padding: 12px 14px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: #fff; color: var(--text); font: 15px/1.55 Inter, system-ui, sans-serif;
+}
+.tabown-lyrics:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.15); }
+.tabown-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
 
 /* Privacy */
 .privacy-banner {
@@ -518,9 +553,9 @@ button.conf-badge.conf-overall:hover { filter: brightness(1.15); }
 .sheet-page .chord-input {
   font: 600 15px var(--mono); width: 8ch; min-width: 4ch;
   padding: 0 3px; margin: 0; border-radius: 2px;
-  background: #fffdf6; color: var(--paper-chord);
-  border: 1px solid var(--paper-chord); outline: none;
-  box-shadow: 0 0 0 2px rgba(154, 78, 18, 0.15);
+  background: #fff; color: var(--accent);
+  border: 1px solid var(--accent); outline: none;
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.18);
 }
 .hint { color: var(--muted); font-size: 13px; margin: -6px 0 16px; }
 .hint .warn { color: var(--danger); font-weight: 500; }

@@ -35,6 +35,11 @@ const api = {
     fd.append("language", opts.language);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json);
   },
+  createManual: (title, lyrics) => fetch("/api/jobs/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, lyrics }),
+  }).then(json),
   rename: (id, title) => fetch(`/api/jobs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) }).then(json),
   upgrade: id => fetch(`/api/jobs/${id}/parts`, { method: "POST" }).then(json),
   lows: id => fetch(`/api/jobs/${id}/lows`).then(json),
@@ -161,7 +166,9 @@ function cleanup() {
 function route() {
   cleanup();
   const m = location.hash.match(/^#\/job\/(\w+)/);
-  if (m) showJob(m[1]); else showLibrary();
+  if (m) showJob(m[1]);
+  else if (/^#\/tab-your-own\/?$/.test(location.hash)) showTabYourOwn();
+  else showLibrary();
   refreshSidebar();
   syncSidebarChrome();
 }
@@ -185,7 +192,11 @@ function setSidebarOpen(open) {
 
 function syncSidebarChrome() {
   const upload = document.getElementById("sidebarUpload");
-  if (upload) upload.classList.toggle("on", !currentJobId());
+  const tabOwn = document.getElementById("sidebarTabOwn");
+  const onHome = !currentJobId() && !/^#\/tab-your-own/.test(location.hash);
+  const onTabOwn = /^#\/tab-your-own/.test(location.hash);
+  if (upload) upload.classList.toggle("on", onHome);
+  if (tabOwn) tabOwn.classList.toggle("on", onTabOwn);
   // Close the drawer after navigating on narrow screens
   if (window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
 }
@@ -240,6 +251,46 @@ function initSidebar() {
 initSidebar();
 route();
 
+/* ---------------- Tab your own (no audio) ---------------- */
+
+function showTabYourOwn() {
+  app.innerHTML = `
+    <section class="tabown-hero">
+      <h1>Tab your own</h1>
+      <p class="lede">Paste lyrics, then add chords on the paper sheet. No audio required — saved in your local library.</p>
+      <label class="tabown-field">Title
+        <input type="text" id="tabownTitle" placeholder="Song title (optional)" maxlength="200">
+      </label>
+      <label class="tabown-field">Lyrics
+        <textarea id="tabownLyrics" class="tabown-lyrics" spellcheck="true"
+          placeholder="Paste lyrics here…&#10;&#10;VERSE&#10;When the night is long&#10;&#10;CHORUS&#10;Hold the line"></textarea>
+      </label>
+      <div class="tabown-actions">
+        <button class="primary" id="tabownCreate">Create sheet</button>
+        <a class="button" href="#/">Back to upload</a>
+        <span id="tabownStatus" class="hint" style="margin:0"></span>
+      </div>
+    </section>`;
+  const titleEl = app.querySelector("#tabownTitle");
+  const lyricsEl = app.querySelector("#tabownLyrics");
+  const status = app.querySelector("#tabownStatus");
+  const create = app.querySelector("#tabownCreate");
+  lyricsEl.focus();
+  create.onclick = async () => {
+    const lyrics = lyricsEl.value.trim();
+    if (!lyrics) { status.textContent = "Paste some lyrics first."; return; }
+    create.disabled = true;
+    status.textContent = "Creating…";
+    try {
+      const job = await api.createManual(titleEl.value.trim(), lyrics);
+      location.hash = `#/job/${job.id}`;
+    } catch (e) {
+      status.textContent = `Couldn't create: ${e.message}`;
+      create.disabled = false;
+    }
+  };
+}
+
 /* ---------------- Home (upload-first) ---------------- */
 
 function showLibrary() {
@@ -252,6 +303,7 @@ function showLibrary() {
       <button class="primary" id="pick">Choose a file</button>
       <div class="secondary-actions">
         <button id="rec">🎙 Record</button>
+        <a class="button" href="#/tab-your-own" id="homeTabOwn">Tab your own</a>
       </div>
       <div class="options">
         <label>Lyrics quality
@@ -525,6 +577,7 @@ function showSong(job) {
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
         <span>Length <b>${fmtTime(r.duration)}</b></span>
         ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Source: ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
+        ${(job.manual || r.manual || r.no_audio) ? `<span class="source-badge">Tab your own</span>` : ""}
         ${r.confidence ? confOverallBtn(r.confidence.overall, r.confidence.disclaimer) : ""}
       </div>
     </div>
@@ -543,8 +596,8 @@ function showSong(job) {
         <label title="Keep the current line in view while playing (pauses briefly when you scroll yourself)"><input type="checkbox" id="follow"> Auto-scroll</label>
         <button id="keysBtn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">🎹 Keyboard</button>
         <button id="export">Export .txt</button>
-        <button id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
-        <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>
+        ${(job.manual || r.manual || r.no_audio) ? "" : `<button id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
+        <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>`}
         <button id="print">Print</button>
       </div>
     </div>
@@ -559,21 +612,40 @@ function showSong(job) {
     </nav>
     <section id="view"></section>`;
 
+  const noAudio = !!(job.manual || r.manual || r.no_audio);
+
   // Sticky footer transport (primary play bar)
   const bar = playbarEl();
   bar.hidden = false;
   document.body.classList.add("has-playbar");
-  bar.innerHTML = `
-    <button type="button" class="play-toggle" id="playToggle" title="Play / pause" aria-label="Play">▶</button>
-    <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
-    <span class="times"><span id="tCur">0:00</span> / <span id="tDur">${fmtTime(r.duration)}</span></span>
-    <input class="seek" id="seek" type="range" min="0" max="${Math.max(1, Math.round(r.duration * 1000))}" value="0" step="50" aria-label="Seek">
-    <select class="stem-pick" id="stem" title="What to listen to">
-      ${["mix", ...(r.stems || [])].map(s => `<option value="${s}">${STEM_LABELS[s] || s}</option>`).join("")}
-    </select>
-    <audio id="audio" preload="auto" src="/api/jobs/${id}/audio/mix"></audio>`;
+  if (noAudio) {
+    bar.innerHTML = `
+      <span class="playbar-note">No audio — click chords on the paper to add them · edit lyrics by double-click</span>
+      <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
+      <span class="times"><span id="tCur">0:00</span> / <span id="tDur">${fmtTime(r.duration)}</span></span>`;
+  } else {
+    bar.innerHTML = `
+      <button type="button" class="play-toggle" id="playToggle" title="Play / pause" aria-label="Play">▶</button>
+      <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
+      <span class="times"><span id="tCur">0:00</span> / <span id="tDur">${fmtTime(r.duration)}</span></span>
+      <input class="seek" id="seek" type="range" min="0" max="${Math.max(1, Math.round(r.duration * 1000))}" value="0" step="50" aria-label="Seek">
+      <select class="stem-pick" id="stem" title="What to listen to">
+        ${["mix", ...(r.stems || [])].map(s => `<option value="${s}">${STEM_LABELS[s] || s}</option>`).join("")}
+      </select>
+      <audio id="audio" preload="auto" src="/api/jobs/${id}/audio/mix"></audio>`;
+  }
 
-  const audio = bar.querySelector("#audio");
+  const audio = noAudio
+    ? {
+        currentTime: 0,
+        paused: true,
+        duration: r.duration,
+        play() { return Promise.resolve(); },
+        pause() {},
+        addEventListener() {},
+        removeEventListener() {},
+      }
+    : bar.querySelector("#audio");
   const view = app.querySelector("#view");
   const curEl = bar.querySelector("#cur");
   const nxtEl = bar.querySelector("#nxt");
@@ -582,38 +654,46 @@ function showSong(job) {
   const tCur = bar.querySelector("#tCur");
   const tDur = bar.querySelector("#tDur");
 
-  const syncPlayUi = () => {
-    playToggle.textContent = audio.paused ? "▶" : "❚❚";
-    playToggle.setAttribute("aria-label", audio.paused ? "Play" : "Pause");
-  };
-  playToggle.onclick = () => {
-    if (audio.paused) audio.play().catch(() => {});
-    else audio.pause();
-  };
-  audio.addEventListener("play", syncPlayUi);
-  audio.addEventListener("pause", syncPlayUi);
-  audio.addEventListener("ended", syncPlayUi);
-  syncPlayUi();
+  if (!noAudio) {
+    const syncPlayUi = () => {
+      playToggle.textContent = audio.paused ? "▶" : "❚❚";
+      playToggle.setAttribute("aria-label", audio.paused ? "Play" : "Pause");
+    };
+    playToggle.onclick = () => {
+      if (audio.paused) audio.play().catch(() => {});
+      else audio.pause();
+    };
+    audio.addEventListener("play", syncPlayUi);
+    audio.addEventListener("pause", syncPlayUi);
+    audio.addEventListener("ended", syncPlayUi);
+    syncPlayUi();
 
-  let seeking = false;
-  seek.onpointerdown = () => { seeking = true; };
-  seek.onpointerup = () => {
-    audio.currentTime = (+seek.value) / 1000;
-    seeking = false;
-  };
-  seek.onchange = () => { audio.currentTime = (+seek.value) / 1000; seeking = false; };
-  const syncSeek = () => {
-    if (!seeking && Number.isFinite(audio.currentTime)) {
-      seek.value = String(Math.round(audio.currentTime * 1000));
-      tCur.textContent = fmtTime(audio.currentTime);
-    }
-    if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      seek.max = String(Math.round(audio.duration * 1000));
-      tDur.textContent = fmtTime(audio.duration);
-    }
-  };
-  audio.addEventListener("timeupdate", syncSeek);
-  audio.addEventListener("loadedmetadata", syncSeek);
+    let seeking = false;
+    seek.onpointerdown = () => { seeking = true; };
+    seek.onpointerup = () => {
+      audio.currentTime = (+seek.value) / 1000;
+      seeking = false;
+    };
+    seek.onchange = () => { audio.currentTime = (+seek.value) / 1000; seeking = false; };
+    const syncSeek = () => {
+      if (!seeking && Number.isFinite(audio.currentTime)) {
+        seek.value = String(Math.round(audio.currentTime * 1000));
+        tCur.textContent = fmtTime(audio.currentTime);
+      }
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        seek.max = String(Math.round(audio.duration * 1000));
+        tDur.textContent = fmtTime(audio.duration);
+      }
+    };
+    audio.addEventListener("timeupdate", syncSeek);
+    audio.addEventListener("loadedmetadata", syncSeek);
+
+    bar.querySelector("#stem").onchange = e => {
+      const t = audio.currentTime, playing = !audio.paused;
+      audio.src = `/api/jobs/${id}/audio/${e.target.value}`;
+      audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); syncPlayUi(); }, { once: true });
+    };
+  }
 
   const titleEl = app.querySelector("#title");
   titleEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); } });
@@ -621,13 +701,6 @@ function showSong(job) {
     const t = titleEl.textContent.trim();
     if (t && t !== job.title) { job.title = t; api.rename(id, t).catch(() => {}); }
   });
-
-  // Audio source switching keeps position
-  bar.querySelector("#stem").onchange = e => {
-    const t = audio.currentTime, playing = !audio.paused;
-    audio.src = `/api/jobs/${id}/audio/${e.target.value}`;
-    audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); syncPlayUi(); }, { once: true });
-  };
 
   function updateHeader() {
     app.querySelector("#key").textContent = keyName();
@@ -731,12 +804,12 @@ function showSong(job) {
   followBox.onchange = () => { st.follow = followBox.checked; store.set("follow", st.follow); };
   app.querySelector("#print").onclick = () => window.print();
   app.querySelector("#export").onclick = () => exportText();
-  app.querySelector("#pdf").onclick = () => {
+  app.querySelector("#pdf")?.addEventListener("click", () => {
     const parts = ["chords"];
     if (r.parts?.guitar?.note_count) parts.push("guitar");
     else if (r.parts?.bass?.note_count) parts.push("bass");
     window.location.href = `/api/jobs/${id}/pdf?parts=${parts.join(",")}`;
-  };
+  });
 
   const tabBtns = app.querySelectorAll(".tabs button");
   tabBtns.forEach(b => (b.onclick = () => { st.view = b.dataset.view; store.set("view", st.view); render(); }));
@@ -1661,6 +1734,7 @@ function showSong(job) {
   audio.addEventListener("seeked", tick);
 
   const onKey = e => {
+    if (noAudio) return;
     if (e.code !== "Space" || e.target.closest("input, select, [contenteditable=true], button")) return;
     e.preventDefault();
     audio.paused ? audio.play() : audio.pause();

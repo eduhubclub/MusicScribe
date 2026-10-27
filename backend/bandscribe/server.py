@@ -137,6 +137,26 @@ async def create_job(
     return _get(meta["id"])
 
 
+@app.post("/api/jobs/manual")
+def create_manual_job(payload: dict = Body(...)):
+    """Tab your own: paste lyrics, get a local editable sheet with no audio."""
+    lyrics_text = str(payload.get("lyrics") or "").strip()
+    if not lyrics_text:
+        raise HTTPException(400, "lyrics required")
+    title = str(payload.get("title") or "").strip()
+    if not title:
+        from .manual_sheet import _is_section
+        first = "Untitled"
+        for ln in lyrics_text.splitlines():
+            s = ln.strip()
+            if s and not _is_section(s):
+                first = s
+                break
+        title = first[:80]
+    meta = store.create_manual(title, lyrics_text)
+    return {**meta, "result": store.result(meta["id"])}
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
     meta = _get(job_id)
