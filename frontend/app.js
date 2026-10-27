@@ -175,8 +175,12 @@ function route() {
   cleanup();
   const m = location.hash.match(/^#\/job\/(\w+)/);
   if (m) showJob(m[1]);
+  else if (/^#\/create\/?$/.test(location.hash)) showCreate();
+  else if (/^#\/record\/?$/.test(location.hash)) showRecord();
   else if (/^#\/tab-your-own\/?$/.test(location.hash)) showTabYourOwn();
   else if (/^#\/library\/?$/.test(location.hash)) showLibraryGrid();
+  else if (/^#\/upload\/?$/.test(location.hash)) showLibrary();
+  else if (location.hash === "#/" || location.hash === "" || location.hash === "#") showCreate();
   else showLibrary();
   refreshSidebar();
   syncSidebarChrome();
@@ -264,15 +268,12 @@ function setSidebarSide(side) {
 
 function syncSidebarChrome() {
   const library = document.getElementById("headerLibrary");
-  const upload = document.getElementById("headerUpload");
-  const tabOwn = document.getElementById("headerTabOwn");
+  const create = document.getElementById("headerCreate");
   const onLibrary = /^#\/library\/?$/.test(location.hash);
-  const onTabOwn = /^#\/tab-your-own/.test(location.hash);
-  const onHome = !currentJobId() && !onLibrary && !onTabOwn
-    && (location.hash === "#/" || location.hash === "" || location.hash === "#");
+  const onCreateFlow = /^#\/(create|upload|record|tab-your-own)\/?$/.test(location.hash)
+    || location.hash === "#/" || location.hash === "" || location.hash === "#";
   if (library) library.classList.toggle("on", onLibrary);
-  if (upload) upload.classList.toggle("on", onHome);
-  if (tabOwn) tabOwn.classList.toggle("on", onTabOwn);
+  if (create) create.classList.toggle("on", onCreateFlow && !onLibrary && !currentJobId());
   // Library grid / song page: hide the duplicate sidebar song list.
   document.body.classList.toggle("on-library-page", onLibrary);
   document.body.classList.toggle("on-song-page", !!currentJobId());
@@ -289,7 +290,7 @@ async function refreshSidebar() {
     return;
   }
   if (!jobs.length) {
-    el.innerHTML = `<p class="sidebar-empty">No songs yet — use Upload to add one.</p>`;
+    el.innerHTML = `<p class="sidebar-empty">No songs yet — use Create to add one.</p>`;
     return;
   }
   const active = currentJobId();
@@ -316,7 +317,6 @@ function initSidebar() {
   const themeBtn = document.getElementById("sidebarTheme");
   const flipBtn = document.getElementById("sidebarFlip");
   const backdrop = document.getElementById("sidebarBackdrop");
-  const upload = document.getElementById("headerUpload");
   toggle?.addEventListener("click", () => {
     setSidebarOpen(!document.body.classList.contains("sidebar-open"));
   });
@@ -330,11 +330,6 @@ function initSidebar() {
     setSidebarSide(document.body.classList.contains("sidebar-right") ? "left" : "right");
   });
   backdrop?.addEventListener("click", () => setSidebarOpen(false));
-  upload?.addEventListener("click", () => {
-    if (location.hash === "#/" || location.hash === "" || location.hash === "#") {
-      syncSidebarChrome();
-    }
-  });
   setDarkMode(!!store.get("darkMode", false));
   setSidebarSide(store.get("sidebarSide", "left") === "right" ? "right" : "left");
   setSidebarCollapsed(!!store.get("sidebarCollapsed", false));
@@ -384,6 +379,111 @@ initSplash();
 initSidebar();
 route();
 
+/* ---------------- Create hub ---------------- */
+
+function showCreate() {
+  app.innerHTML = `
+    <section class="create-page">
+      <header class="create-page-head">
+        <h1>Create</h1>
+        <p class="lede">Choose how you want to start a song.</p>
+      </header>
+      <div class="create-tiles" role="list">
+        <a class="create-tile" href="#/upload" role="listitem" title="Upload an audio or video file">
+          <span class="create-tile-mark" aria-hidden="true">↑</span>
+          <span class="create-tile-label">Upload</span>
+          <span class="create-tile-desc">MP3, WAV, FLAC, M4A, or video</span>
+        </a>
+        <a class="create-tile" href="#/record" role="listitem" title="Record with your microphone">
+          <span class="create-tile-mark" aria-hidden="true">●</span>
+          <span class="create-tile-label">Record</span>
+          <span class="create-tile-desc">Capture audio from your mic</span>
+        </a>
+        <a class="create-tile" href="#/tab-your-own" role="listitem" title="Paste lyrics and add your own chords">
+          <span class="create-tile-mark" aria-hidden="true">♪</span>
+          <span class="create-tile-label">Tab</span>
+          <span class="create-tile-desc">Lyrics and chords, no audio</span>
+        </a>
+      </div>
+    </section>`;
+}
+
+/* ---------------- Record (microphone) ---------------- */
+
+function showRecord() {
+  const opts = store.get("opts", { whisper_model: "small", language: "" });
+  app.innerHTML = `
+    <section class="home-hero record-hero">
+      <h1>Record</h1>
+      <p class="lede">Capture a take with your microphone. Everything stays on this computer.</p>
+      <button class="primary" id="rec">Start recording</button>
+      <a class="button" href="#/create">Back to Create</a>
+      <div class="options">
+        <label>Lyrics quality
+          <select id="wm">
+            <option value="small">Fast (small)</option>
+            <option value="medium">Better (medium)</option>
+            <option value="large-v3-turbo">Best (large-v3-turbo)</option>
+          </select>
+        </label>
+        <label>Language
+          <select id="lang">
+            <option value="">Auto-detect</option>
+            ${["en English", "es Spanish", "fr French", "de German", "it Italian", "pt Portuguese", "nl Dutch", "sv Swedish", "ja Japanese", "ko Korean", "zh Chinese"]
+              .map(s => `<option value="${s.slice(0, 2)}">${s.slice(3)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <p id="status" style="margin:14px 0 0"></p>
+    </section>`;
+  const wm = app.querySelector("#wm");
+  const lang = app.querySelector("#lang");
+  const status = app.querySelector("#status");
+  const recBtn = app.querySelector("#rec");
+  wm.value = opts.whisper_model;
+  lang.value = opts.language;
+  const currentOpts = () => {
+    const o = { whisper_model: wm.value, language: lang.value };
+    store.set("opts", o);
+    return o;
+  };
+  async function upload(file) {
+    status.innerHTML = `<span class="upload-busy"><img src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
+    try {
+      const meta = await api.upload(file, currentOpts());
+      location.hash = `#/job/${meta.id}`;
+    } catch (e) {
+      status.textContent = `Upload failed: ${e.message}`;
+    }
+  }
+  let recorder = null;
+  recBtn.onclick = async () => {
+    if (recorder) { recorder.stop(); return; }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    } catch (e) {
+      status.textContent = `Microphone unavailable: ${e.message}`;
+      return;
+    }
+    const chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      recorder = null;
+      clearInterval(tick);
+      recBtn.textContent = "Start recording";
+      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+      upload(new File(chunks, `Recording ${stamp}.webm`, { type: "audio/webm" }));
+    };
+    recorder.start();
+    const t0 = Date.now();
+    const tick = setInterval(() => { recBtn.innerHTML = `<span class="rec-dot"></span>Stop (${fmtTime((Date.now() - t0) / 1000)})`; }, 250);
+    cleanupFns.push(() => { if (recorder) { recorder.onstop = null; recorder.stop(); stream.getTracks().forEach(t => t.stop()); clearInterval(tick); } });
+  };
+}
+
 /* ---------------- Tab your own (no audio) ---------------- */
 
 function showTabYourOwn() {
@@ -400,7 +500,7 @@ function showTabYourOwn() {
       </label>
       <div class="tabown-actions">
         <button class="primary" id="tabownCreate">Create sheet</button>
-        <a class="button" href="#/">Back to upload</a>
+        <a class="button" href="#/create">Back to Create</a>
         <span id="tabownStatus" class="hint" style="margin:0"></span>
       </div>
     </section>`;
@@ -450,7 +550,7 @@ async function refreshLibraryGrid() {
     return;
   }
   if (!jobs.length) {
-    el.innerHTML = `<p class="empty">No songs yet — <a href="#/">upload one</a> or <a href="#/tab-your-own">tab your own</a>.</p>`;
+    el.innerHTML = `<p class="empty">No songs yet — <a href="#/create">Create</a> one.</p>`;
     return;
   }
   el.innerHTML = jobs.map(j => {
@@ -480,10 +580,7 @@ function showLibrary() {
       <p class="lede">Drop an MP3, WAV, FLAC, M4A, or video — or pick a file. Everything stays on this computer.</p>
       <input type="file" id="file" accept="audio/*,video/*" hidden>
       <button class="primary" id="pick">Choose a file</button>
-      <div class="secondary-actions">
-        <button id="rec">🎙 Record</button>
-        <a class="button" href="#/tab-your-own" id="homeTabOwn">Tab your own</a>
-      </div>
+      <a class="button" href="#/create">Back to Create</a>
       <div class="options">
         <label>Lyrics quality
           <select id="wm">
@@ -523,7 +620,7 @@ function showLibrary() {
     try {
       if (window.LocalStore) await LocalStore.clearAllLocalData();
       else await api.clearLocal();
-      location.hash = "#/";
+      location.hash = "#/create";
       route();
     } catch (e) {
       alert(`Clear failed: ${e.message}`);
@@ -563,35 +660,6 @@ function showLibrary() {
     const f = e.dataTransfer.files[0];
     if (f) upload(f);
   });
-
-  // Microphone recording
-  const recBtn = app.querySelector("#rec");
-  let recorder = null;
-  recBtn.onclick = async () => {
-    if (recorder) { recorder.stop(); return; }
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    } catch (e) {
-      status.textContent = `Microphone unavailable: ${e.message}`;
-      return;
-    }
-    const chunks = [];
-    recorder = new MediaRecorder(stream);
-    recorder.ondataavailable = e => chunks.push(e.data);
-    recorder.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      recorder = null;
-      clearInterval(tick);
-      recBtn.innerHTML = "🎙 Record";
-      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-      upload(new File(chunks, `Recording ${stamp}.webm`, { type: "audio/webm" }));
-    };
-    recorder.start();
-    const t0 = Date.now();
-    const tick = setInterval(() => { recBtn.innerHTML = `<span class="rec-dot"></span>Stop (${fmtTime((Date.now() - t0) / 1000)})`; }, 250);
-    cleanupFns.push(() => { if (recorder) { recorder.onstop = null; recorder.stop(); stream.getTracks().forEach(t => t.stop()); clearInterval(tick); } });
-  };
 
   refreshList();
 }
@@ -641,7 +709,7 @@ async function refreshList() {
 async function showJob(id) {
   let job;
   try { job = await api.get(id); } catch (e) {
-    app.innerHTML = `<p class="empty">Couldn't load this song: ${esc(e.message)}. <a href="#/">Back</a></p>`;
+    app.innerHTML = `<p class="empty">Couldn't load this song: ${esc(e.message)}. <a href="#/create">Back</a></p>`;
     return;
   }
   if (job.status === "done" && job.result) showSong(job);

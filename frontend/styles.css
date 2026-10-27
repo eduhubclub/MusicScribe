@@ -173,7 +173,7 @@ select, input[type=text] {
   display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end;
   gap: 8px;
 }
-.topbar-library, .topbar-upload, .topbar-tabown {
+.topbar-library, .topbar-create {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: 36px; padding: 8px 14px; border-radius: 12px;
   text-decoration: none; font-size: 13px; font-weight: 600; line-height: 1.25;
@@ -186,20 +186,65 @@ select, input[type=text] {
 .topbar-library.on {
   background: var(--chrome-active); color: var(--edu-blue-700); border-color: var(--accent);
 }
-.topbar-upload {
+.topbar-create {
   background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
-.topbar-upload:hover { opacity: 0.92; }
-.topbar-upload.on {
+.topbar-create:hover { opacity: 0.92; }
+.topbar-create.on {
   background: var(--chrome-active); color: var(--edu-blue-700); border-color: var(--accent);
+  box-shadow: none;
 }
-.topbar-tabown {
-  background: transparent; color: var(--chrome-muted);
+
+/* Create hub — three square entry tiles */
+.create-page { max-width: 920px; margin: 0 auto; }
+.create-page-head { margin: 0 0 28px; }
+.create-page-head h1 {
+  margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: var(--text);
 }
-.topbar-tabown:hover { background: var(--chrome-hover); color: var(--edu-blue-600); }
-.topbar-tabown.on {
-  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+.create-page-head .lede { margin: 0; color: var(--muted); max-width: 420px; }
+.create-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.create-tile {
+  aspect-ratio: 1 / 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px;
+  padding: 20px 16px;
+  text-align: center; text-decoration: none;
+  color: var(--text);
+  background: var(--panel);
+  border: var(--edu-border);
+  border-radius: 16px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.create-tile:hover {
+  background: var(--chrome-hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.create-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.create-tile-mark {
+  font-size: 28px; line-height: 1;
+  color: var(--edu-blue-600);
+  font-weight: 700;
+}
+.create-tile-label {
+  font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+}
+.create-tile-desc {
+  font-size: 12px; font-weight: 500; color: var(--muted);
+  max-width: 14em; line-height: 1.35;
+}
+@media (max-width: 720px) {
+  .create-tiles { grid-template-columns: 1fr; max-width: 280px; margin: 0 auto; }
 }
 
 /* Full library grid page */
@@ -853,6 +898,7 @@ html[data-theme="dark"] button.primary {
 .home-hero h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.02em; }
 .home-hero .lede { color: var(--muted); margin: 0 auto 22px; max-width: 420px; }
 .home-hero .primary { font-size: 16px; padding: 12px 22px; }
+.home-hero > .button { display: inline-flex; margin-top: 12px; }
 .home-hero .secondary-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
 .home-recent { margin-top: 36px; }
 .home-recent h2 { margin: 0 0 12px; font-size: 15px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
