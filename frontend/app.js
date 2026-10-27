@@ -86,6 +86,57 @@ const PART_VIEWS = [["guitar", "Guitar tab"], ["bass", "Bass tab"], ["piano", "P
 const TAB_VIEWS = ["guitar", "bass", "drums"];
 const ROLL_VIEWS = ["piano", "melody"];
 const STEM_LABELS = { mix: "Full mix", vocals: "Vocals only", guitar: "Guitar", bass: "Bass", piano: "Piano / keys", drums: "Drums", other: "Other" };
+const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const GUITAR_STRINGS = [
+  { name: "E2", hz: 82.41 },
+  { name: "A2", hz: 110.00 },
+  { name: "D3", hz: 146.83 },
+  { name: "G3", hz: 196.00 },
+  { name: "B3", hz: 246.94 },
+  { name: "E4", hz: 329.63 },
+];
+function freqToNote(hz) {
+  const midi = 69 + 12 * Math.log2(hz / 440);
+  const nearest = Math.round(midi);
+  const cents = Math.round((midi - nearest) * 100);
+  const name = NOTE_NAMES[((nearest % 12) + 12) % 12];
+  const octave = Math.floor(nearest / 12) - 1;
+  return { name, octave, cents, midi: nearest, label: `${name}${octave}` };
+}
+function detectPitchHz(buf, sampleRate) {
+  // Autocorrelation pitch detect — solid for single guitar notes.
+  let rms = 0;
+  for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / buf.length);
+  if (rms < 0.01) return null;
+
+  const minLag = Math.floor(sampleRate / 1000);   // ~1000 Hz ceiling
+  const maxLag = Math.floor(sampleRate / 70);     // ~70 Hz floor (low E)
+  let bestLag = -1;
+  let bestCorr = 0;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let corr = 0;
+    for (let i = 0; i < buf.length - lag; i++) corr += buf[i] * buf[i + lag];
+    const norm = corr / (buf.length - lag);
+    if (norm > bestCorr) {
+      bestCorr = norm;
+      bestLag = lag;
+    }
+  }
+  if (bestLag < 0 || bestCorr < 0.01) return null;
+
+  // Parabolic interpolation around the peak lag
+  let y0 = 0, y2 = 0;
+  for (let i = 0; i < buf.length - (bestLag - 1); i++) y0 += buf[i] * buf[i + bestLag - 1];
+  y0 /= (buf.length - (bestLag - 1));
+  for (let i = 0; i < buf.length - (bestLag + 1); i++) y2 += buf[i] * buf[i + bestLag + 1];
+  y2 /= (buf.length - (bestLag + 1));
+  const y1 = bestCorr;
+  const denom = 2 * (2 * y1 - y0 - y2);
+  const shift = denom ? (y0 - y2) / denom : 0;
+  const lag = bestLag + Math.max(-1, Math.min(1, shift));
+  return sampleRate / lag;
+}
 const confLevel = s => (s < 0.55 ? "low" : s < 0.75 ? "mid" : "ok");
 const confBadge = (label, score, title = "") =>
   `<span class="conf-badge ${confLevel(score)}" title="${esc(title || "")}">${esc(label)} ${Math.round(score * 100)}%</span>`;
@@ -415,70 +466,6 @@ function showCreate() {
 }
 
 /* ---------------- Guitar tuner (mic pitch) ---------------- */
-
-const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-const GUITAR_STRINGS = [
-  { name: "E2", hz: 82.41 },
-  { name: "A2", hz: 110.00 },
-  { name: "D3", hz: 146.83 },
-  { name: "G3", hz: 196.00 },
-  { name: "B3", hz: 246.94 },
-  { name: "E4", hz: 329.63 },
-];
-
-function freqToNote(hz) {
-  const midi = 69 + 12 * Math.log2(hz / 440);
-  const nearest = Math.round(midi);
-  const cents = Math.round((midi - nearest) * 100);
-  const name = NOTE_NAMES[((nearest % 12) + 12) % 12];
-  const octave = Math.floor(nearest / 12) - 1;
-  return { name, octave, cents, midi: nearest, label: `${name}${octave}` };
-}
-
-function detectPitchHz(buf, sampleRate) {
-  // Autocorrelation pitch detect — solid for single guitar notes.
-  let rms = 0;
-  for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
-  rms = Math.sqrt(rms / buf.length);
-  if (rms < 0.01) return null;
-
-  const minLag = Math.floor(sampleRate / 1000);   // ~1000 Hz ceiling
-  const maxLag = Math.floor(sampleRate / 70);     // ~70 Hz floor (low E)
-  let bestLag = -1;
-  let bestCorr = 0;
-  let prevCorr = 1;
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    let corr = 0;
-    for (let i = 0; i < buf.length - lag; i++) corr += buf[i] * buf[i + lag];
-    const norm = corr / (buf.length - lag);
-    if (prevCorr > bestCorr && norm < prevCorr && bestLag < 0) {
-      // first drop after a peak — keep scanning for global max below
-    }
-    if (norm > bestCorr) {
-      bestCorr = norm;
-      bestLag = lag;
-    }
-    prevCorr = norm;
-  }
-  if (bestLag < 0 || bestCorr < 0.01) return null;
-
-  // Parabolic interpolation around the peak lag
-  const y0 = (() => {
-    let s = 0;
-    for (let i = 0; i < buf.length - (bestLag - 1); i++) s += buf[i] * buf[i + bestLag - 1];
-    return s / (buf.length - (bestLag - 1));
-  })();
-  const y1 = bestCorr;
-  const y2 = (() => {
-    let s = 0;
-    for (let i = 0; i < buf.length - (bestLag + 1); i++) s += buf[i] * buf[i + bestLag + 1];
-    return s / (buf.length - (bestLag + 1));
-  })();
-  const denom = 2 * (2 * y1 - y0 - y2);
-  const shift = denom ? (y0 - y2) / denom : 0;
-  const lag = bestLag + Math.max(-1, Math.min(1, shift));
-  return sampleRate / lag;
-}
 
 function showTuner() {
   app.innerHTML = `
