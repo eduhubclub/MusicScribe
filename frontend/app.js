@@ -98,11 +98,22 @@ const confMeters = conf => {
 
 let timers = [];
 let cleanupFns = [];
+const playbarEl = () => document.getElementById("playbar");
+
+function hidePlaybar() {
+  const bar = playbarEl();
+  if (!bar) return;
+  bar.hidden = true;
+  bar.innerHTML = "";
+  document.body.classList.remove("has-playbar");
+}
+
 function cleanup() {
   timers.forEach(clearTimeout);
   timers = [];
   cleanupFns.forEach(fn => fn());
   cleanupFns = [];
+  hidePlaybar();
 }
 
 function route() {
@@ -113,22 +124,19 @@ function route() {
 window.addEventListener("hashchange", route);
 route();
 
-/* ---------------- Library ---------------- */
+/* ---------------- Home (upload-first) ---------------- */
 
 function showLibrary() {
   const opts = store.get("opts", { whisper_model: "small", language: "" });
   app.innerHTML = `
-    <div class="privacy-banner" id="privacyBanner">
-      <strong>Private by default.</strong>
-      <span id="privacyText">Loading privacy status…</span>
-      <button id="clearLocal" title="Delete ephemeral jobs and browser prefs on this machine">Clear local data</button>
-    </div>
-    <section class="drop" id="drop">
-      <h2>Drop a song here</h2>
-      <p>MP3, WAV, FLAC, M4A, video files, or record from your microphone. Files stay on this machine — no cloud upload, no accounts.</p>
+    <section class="home-hero drop" id="drop">
+      <h1>Upload your song</h1>
+      <p class="lede">Drop an MP3, WAV, FLAC, M4A, or video — or pick a file. Everything stays on this computer.</p>
       <input type="file" id="file" accept="audio/*,video/*" hidden>
-      <button class="primary" id="pick">Choose file</button>
-      <button id="rec">🎙 Record</button>
+      <button class="primary" id="pick">Choose a file</button>
+      <div class="secondary-actions">
+        <button id="rec">🎙 Record</button>
+      </div>
       <div class="options">
         <label>Lyrics quality
           <select id="wm">
@@ -147,7 +155,15 @@ function showLibrary() {
       </div>
       <p id="status" style="margin:14px 0 0"></p>
     </section>
-    <div class="jobs" id="jobs"></div>`;
+    <section class="home-recent">
+      <h2>Recent on this device</h2>
+      <div class="jobs" id="jobs"></div>
+    </section>
+    <div class="privacy-banner" id="privacyBanner">
+      <strong>Private by default.</strong>
+      <span id="privacyText">Loading privacy status…</span>
+      <button id="clearLocal" title="Delete ephemeral jobs and browser prefs on this machine">Clear local data</button>
+    </div>`;
 
   api.privacy().then(p => {
     app.querySelector("#privacyText").textContent = p.promise;
@@ -239,7 +255,7 @@ async function refreshList() {
   let jobs;
   try { jobs = await api.list(); } catch { return; }
   if (!jobs.length) {
-    el.innerHTML = `<p class="empty">No songs yet. Your transcriptions will appear here.</p>`;
+    el.innerHTML = `<p class="empty">No songs yet — upload one above to get started.</p>`;
     return;
   }
   el.innerHTML = jobs.map(j => {
@@ -377,18 +393,13 @@ function showSong(job) {
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
         <span>Length <b>${fmtTime(r.duration)}</b></span>
-        ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Guitar tab ← ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
+        ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Source: ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
         ${r.confidence ? confBadge("overall", r.confidence.overall, r.confidence.disclaimer) : ""}
       </div>
       ${r.confidence ? confMeters(r.confidence) : ""}
     </div>
-    <div class="player">
-      <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
-      <audio id="audio" controls preload="auto" src="/api/jobs/${id}/audio/mix"></audio>
+    <div class="song-tools no-print">
       <div class="controls">
-        <select id="stem" title="What to listen to">
-          ${["mix", ...r.stems].map(s => `<option value="${s}">${STEM_LABELS[s] || s}</option>`).join("")}
-        </select>
         <select id="tuning" title="Your guitar's tuning: chord names, diagrams and tab follow it">
           ${TUNINGS.map(([n]) => `<option>${n}</option>`).join("")}
         </select>
@@ -406,8 +417,8 @@ function showSong(job) {
         <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>
         <button id="print">Print</button>
       </div>
-      <div id="kbd" class="kbd-wrap" hidden></div>
     </div>
+    <div id="kbd" class="kbd-wrap kbd-host no-print" hidden></div>
     <div id="upgrade"></div>
     <div id="suggest"></div>
     <nav class="tabs">
@@ -418,10 +429,61 @@ function showSong(job) {
     </nav>
     <section id="view"></section>`;
 
-  const audio = app.querySelector("#audio");
+  // Sticky footer transport (primary play bar)
+  const bar = playbarEl();
+  bar.hidden = false;
+  document.body.classList.add("has-playbar");
+  bar.innerHTML = `
+    <button type="button" class="play-toggle" id="playToggle" title="Play / pause" aria-label="Play">▶</button>
+    <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
+    <span class="times"><span id="tCur">0:00</span> / <span id="tDur">${fmtTime(r.duration)}</span></span>
+    <input class="seek" id="seek" type="range" min="0" max="${Math.max(1, Math.round(r.duration * 1000))}" value="0" step="50" aria-label="Seek">
+    <select class="stem-pick" id="stem" title="What to listen to">
+      ${["mix", ...(r.stems || [])].map(s => `<option value="${s}">${STEM_LABELS[s] || s}</option>`).join("")}
+    </select>
+    <audio id="audio" preload="auto" src="/api/jobs/${id}/audio/mix"></audio>`;
+
+  const audio = bar.querySelector("#audio");
   const view = app.querySelector("#view");
-  const curEl = app.querySelector("#cur");
-  const nxtEl = app.querySelector("#nxt");
+  const curEl = bar.querySelector("#cur");
+  const nxtEl = bar.querySelector("#nxt");
+  const playToggle = bar.querySelector("#playToggle");
+  const seek = bar.querySelector("#seek");
+  const tCur = bar.querySelector("#tCur");
+  const tDur = bar.querySelector("#tDur");
+
+  const syncPlayUi = () => {
+    playToggle.textContent = audio.paused ? "▶" : "❚❚";
+    playToggle.setAttribute("aria-label", audio.paused ? "Play" : "Pause");
+  };
+  playToggle.onclick = () => {
+    if (audio.paused) audio.play().catch(() => {});
+    else audio.pause();
+  };
+  audio.addEventListener("play", syncPlayUi);
+  audio.addEventListener("pause", syncPlayUi);
+  audio.addEventListener("ended", syncPlayUi);
+  syncPlayUi();
+
+  let seeking = false;
+  seek.onpointerdown = () => { seeking = true; };
+  seek.onpointerup = () => {
+    audio.currentTime = (+seek.value) / 1000;
+    seeking = false;
+  };
+  seek.onchange = () => { audio.currentTime = (+seek.value) / 1000; seeking = false; };
+  const syncSeek = () => {
+    if (!seeking && Number.isFinite(audio.currentTime)) {
+      seek.value = String(Math.round(audio.currentTime * 1000));
+      tCur.textContent = fmtTime(audio.currentTime);
+    }
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      seek.max = String(Math.round(audio.duration * 1000));
+      tDur.textContent = fmtTime(audio.duration);
+    }
+  };
+  audio.addEventListener("timeupdate", syncSeek);
+  audio.addEventListener("loadedmetadata", syncSeek);
 
   const titleEl = app.querySelector("#title");
   titleEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); } });
@@ -431,10 +493,10 @@ function showSong(job) {
   });
 
   // Audio source switching keeps position
-  app.querySelector("#stem").onchange = e => {
+  bar.querySelector("#stem").onchange = e => {
     const t = audio.currentTime, playing = !audio.paused;
     audio.src = `/api/jobs/${id}/audio/${e.target.value}`;
-    audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); }, { once: true });
+    audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); syncPlayUi(); }, { once: true });
   };
 
   function updateHeader() {
@@ -1382,7 +1444,7 @@ function showSong(job) {
     if (!audio.paused) raf = requestAnimationFrame(tick);
   }
 
-  // Auto-scroll: keep the current line ~30% down the space below the sticky player,
+  // Auto-scroll: keep the current line ~30% down the space below the sticky header,
   // so the upcoming lines stay visible. Manual scrolling pauses it for a few seconds.
   let manualUntil = 0;
   const onManualScroll = () => { manualUntil = performance.now() + 4000; };
@@ -1391,8 +1453,11 @@ function showSong(job) {
 
   function followTo(el) {
     if (!el || !st.follow || audio.paused || performance.now() < manualUntil) return;
-    const top = app.querySelector(".player").getBoundingClientRect().bottom;
-    const target = window.scrollY + el.getBoundingClientRect().top - top - (window.innerHeight - top) * 0.3;
+    const header = document.querySelector(".topbar");
+    const top = header ? header.getBoundingClientRect().bottom : 0;
+    const bottomReserve = bar.getBoundingClientRect().height || 0;
+    const usable = Math.max(120, window.innerHeight - top - bottomReserve);
+    const target = window.scrollY + el.getBoundingClientRect().top - top - usable * 0.3;
     if (Math.abs(target - window.scrollY) > 8) window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
   }
 
