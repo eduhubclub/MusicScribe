@@ -96,7 +96,14 @@ button, select, input { font: inherit; color: inherit; }
   font-size: 15px;
   font-weight: 600;
   border-radius: 12px;
+  border: none;
+  box-shadow: none;
   cursor: pointer;
+}
+.splash-cta.primary,
+.splash-cta.primary:hover {
+  border: none;
+  box-shadow: none;
 }
 body.splash-active { overflow: hidden; }
 body.splash-active .sidebar,
