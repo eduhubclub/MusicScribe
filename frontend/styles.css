@@ -205,9 +205,12 @@ select, input[type=text] {
 .create-page-head .lede { margin: 0; color: var(--muted); max-width: 420px; }
 .create-tiles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
+}
+@media (max-width: 900px) {
+  .create-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .create-tile {
   aspect-ratio: 1 / 1;
@@ -243,9 +246,81 @@ select, input[type=text] {
   font-size: 12px; font-weight: 500; color: var(--muted);
   max-width: 14em; line-height: 1.35;
 }
-@media (max-width: 720px) {
+@media (max-width: 520px) {
   .create-tiles { grid-template-columns: 1fr; max-width: 280px; margin: 0 auto; }
 }
+
+/* Guitar tuner */
+.tuner-page { max-width: 640px; margin: 0 auto; }
+.tuner-head { margin: 0 0 22px; }
+.tuner-head h1 {
+  margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: var(--text);
+}
+.tuner-head .lede { margin: 0; color: var(--muted); }
+.tuner-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 28px 22px 24px;
+  border: var(--edu-border); border-radius: 16px;
+  background: var(--panel);
+  text-align: center;
+}
+.tuner-note {
+  font-size: 64px; font-weight: 700; letter-spacing: -0.03em;
+  line-height: 1; color: var(--text); min-height: 64px;
+  font-variant-numeric: tabular-nums;
+}
+.tuner-note.in-tune { color: #047857; }
+.tuner-cents {
+  font-size: 15px; font-weight: 600; color: var(--muted);
+  min-height: 1.4em;
+}
+.tuner-cents.in-tune { color: #047857; }
+.tuner-meter { width: min(420px, 100%); }
+.tuner-meter-track {
+  position: relative; height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fecaca 0%, #fef3c7 35%, #bbf7d0 50%, #fef3c7 65%, #fecaca 100%);
+  border: var(--edu-border-thin);
+}
+.tuner-meter-mark {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: rgba(15, 23, 42, 0.25); transform: translateX(-50%);
+}
+.tuner-meter-mark.mid { background: rgba(15, 23, 42, 0.55); width: 3px; }
+.tuner-meter-needle {
+  position: absolute; top: -6px; width: 4px; height: 26px;
+  border-radius: 4px; background: var(--edu-slate-900);
+  transform: translateX(-50%);
+  transition: left 0.08s linear, background 0.15s ease;
+}
+.tuner-meter-needle.in-tune { background: #047857; }
+.tuner-meter-labels {
+  display: flex; justify-content: space-between;
+  margin-top: 6px; font-size: 11px; color: var(--muted); font-weight: 600;
+}
+.tuner-hz {
+  font-family: var(--mono); font-size: 13px; color: var(--muted); min-height: 1.2em;
+}
+.tuner-strings {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+}
+.tuner-string {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; padding: 6px 10px;
+  border-radius: 10px; border: var(--edu-border);
+  font-size: 12px; font-weight: 700; color: var(--chrome-muted);
+  background: transparent;
+}
+.tuner-string.on {
+  color: var(--edu-blue-700); border-color: var(--accent);
+  background: var(--edu-blue-50);
+}
+.tuner-wave {
+  width: min(560px, 100%); height: 72px;
+  border-radius: 10px; background: var(--chrome-hover);
+}
+.tuner-status { margin: 0; font-size: 13px; color: var(--muted); }
+.tuner-panel > .button { margin-top: 4px; }
 
 /* Full library grid page */
 .library-page { max-width: 1100px; margin: 0 auto; }

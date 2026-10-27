@@ -177,6 +177,7 @@ function route() {
   if (m) showJob(m[1]);
   else if (/^#\/create\/?$/.test(location.hash)) showCreate();
   else if (/^#\/record\/?$/.test(location.hash)) showRecord();
+  else if (/^#\/tuner\/?$/.test(location.hash)) showTuner();
   else if (/^#\/tab-your-own\/?$/.test(location.hash)) showTabYourOwn();
   else if (/^#\/library\/?$/.test(location.hash)) showLibraryGrid();
   else if (/^#\/upload\/?$/.test(location.hash)) showLibrary();
@@ -270,7 +271,7 @@ function syncSidebarChrome() {
   const library = document.getElementById("headerLibrary");
   const create = document.getElementById("headerCreate");
   const onLibrary = /^#\/library\/?$/.test(location.hash);
-  const onCreateFlow = /^#\/(create|upload|record|tab-your-own)\/?$/.test(location.hash)
+  const onCreateFlow = /^#\/(create|upload|record|tuner|tab-your-own)\/?$/.test(location.hash)
     || location.hash === "#/" || location.hash === "" || location.hash === "#";
   if (library) library.classList.toggle("on", onLibrary);
   if (create) create.classList.toggle("on", onCreateFlow && !onLibrary && !currentJobId());
@@ -404,8 +405,220 @@ function showCreate() {
           <span class="create-tile-label">Tab</span>
           <span class="create-tile-desc">Lyrics and chords, no audio</span>
         </a>
+        <a class="create-tile" href="#/tuner" role="listitem" title="Tune your guitar with the microphone">
+          <span class="create-tile-mark" aria-hidden="true">♮</span>
+          <span class="create-tile-label">Tuner</span>
+          <span class="create-tile-desc">Mic pitch → note and cents</span>
+        </a>
       </div>
     </section>`;
+}
+
+/* ---------------- Guitar tuner (mic pitch) ---------------- */
+
+const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const GUITAR_STRINGS = [
+  { name: "E2", hz: 82.41 },
+  { name: "A2", hz: 110.00 },
+  { name: "D3", hz: 146.83 },
+  { name: "G3", hz: 196.00 },
+  { name: "B3", hz: 246.94 },
+  { name: "E4", hz: 329.63 },
+];
+
+function freqToNote(hz) {
+  const midi = 69 + 12 * Math.log2(hz / 440);
+  const nearest = Math.round(midi);
+  const cents = Math.round((midi - nearest) * 100);
+  const name = NOTE_NAMES[((nearest % 12) + 12) % 12];
+  const octave = Math.floor(nearest / 12) - 1;
+  return { name, octave, cents, midi: nearest, label: `${name}${octave}` };
+}
+
+function detectPitchHz(buf, sampleRate) {
+  // Autocorrelation pitch detect — solid for single guitar notes.
+  let rms = 0;
+  for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / buf.length);
+  if (rms < 0.01) return null;
+
+  const minLag = Math.floor(sampleRate / 1000);   // ~1000 Hz ceiling
+  const maxLag = Math.floor(sampleRate / 70);     // ~70 Hz floor (low E)
+  let bestLag = -1;
+  let bestCorr = 0;
+  let prevCorr = 1;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let corr = 0;
+    for (let i = 0; i < buf.length - lag; i++) corr += buf[i] * buf[i + lag];
+    const norm = corr / (buf.length - lag);
+    if (prevCorr > bestCorr && norm < prevCorr && bestLag < 0) {
+      // first drop after a peak — keep scanning for global max below
+    }
+    if (norm > bestCorr) {
+      bestCorr = norm;
+      bestLag = lag;
+    }
+    prevCorr = norm;
+  }
+  if (bestLag < 0 || bestCorr < 0.01) return null;
+
+  // Parabolic interpolation around the peak lag
+  const y0 = (() => {
+    let s = 0;
+    for (let i = 0; i < buf.length - (bestLag - 1); i++) s += buf[i] * buf[i + bestLag - 1];
+    return s / (buf.length - (bestLag - 1));
+  })();
+  const y1 = bestCorr;
+  const y2 = (() => {
+    let s = 0;
+    for (let i = 0; i < buf.length - (bestLag + 1); i++) s += buf[i] * buf[i + bestLag + 1];
+    return s / (buf.length - (bestLag + 1));
+  })();
+  const denom = 2 * (2 * y1 - y0 - y2);
+  const shift = denom ? (y0 - y2) / denom : 0;
+  const lag = bestLag + Math.max(-1, Math.min(1, shift));
+  return sampleRate / lag;
+}
+
+function showTuner() {
+  app.innerHTML = `
+    <section class="tuner-page">
+      <header class="tuner-head">
+        <h1>Tuner</h1>
+        <p class="lede">Play a string — pitch is read from your microphone.</p>
+      </header>
+      <div class="tuner-panel" id="tunerPanel">
+        <div class="tuner-note" id="tunerNote">—</div>
+        <div class="tuner-cents" id="tunerCents">Listen…</div>
+        <div class="tuner-meter" aria-hidden="true">
+          <div class="tuner-meter-track">
+            <span class="tuner-meter-mark" style="left:0%"></span>
+            <span class="tuner-meter-mark mid" style="left:50%"></span>
+            <span class="tuner-meter-mark" style="left:100%"></span>
+            <div class="tuner-meter-needle" id="tunerNeedle" style="left:50%"></div>
+          </div>
+          <div class="tuner-meter-labels"><span>−50¢</span><span>0</span><span>+50¢</span></div>
+        </div>
+        <div class="tuner-hz" id="tunerHz"></div>
+        <div class="tuner-strings" id="tunerStrings">
+          ${GUITAR_STRINGS.map(s => `<span class="tuner-string" data-name="${s.name}">${s.name}</span>`).join("")}
+        </div>
+        <canvas class="tuner-wave" id="tunerWave" width="640" height="80" aria-hidden="true"></canvas>
+        <p class="tuner-status" id="tunerStatus">Starting microphone…</p>
+        <button type="button" class="primary" id="tunerToggle" hidden>Start tuner</button>
+        <a class="button" href="#/create">Back to Create</a>
+      </div>
+    </section>`;
+
+  const noteEl = app.querySelector("#tunerNote");
+  const centsEl = app.querySelector("#tunerCents");
+  const needleEl = app.querySelector("#tunerNeedle");
+  const hzEl = app.querySelector("#tunerHz");
+  const statusEl = app.querySelector("#tunerStatus");
+  const toggleBtn = app.querySelector("#tunerToggle");
+  const wave = app.querySelector("#tunerWave");
+  const waveCtx = wave.getContext("2d");
+  const stringEls = [...app.querySelectorAll(".tuner-string")];
+
+  let audioCtx = null;
+  let stream = null;
+  let analyser = null;
+  let buf = null;
+  let raf = 0;
+  let running = false;
+  let smoothCents = 0;
+
+  function drawWave(data) {
+    const w = wave.width;
+    const h = wave.height;
+    waveCtx.clearRect(0, 0, w, h);
+    waveCtx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--edu-blue-600").trim() || "#2563eb";
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    const step = Math.max(1, Math.floor(data.length / w));
+    for (let x = 0; x < w; x++) {
+      const v = data[x * step] || 0;
+      const y = (0.5 - v * 0.45) * h;
+      if (x === 0) waveCtx.moveTo(x, y);
+      else waveCtx.lineTo(x, y);
+    }
+    waveCtx.stroke();
+  }
+
+  function highlightString(label) {
+    stringEls.forEach(el => el.classList.toggle("on", el.dataset.name === label));
+  }
+
+  function tick() {
+    if (!running || !analyser) return;
+    analyser.getFloatTimeDomainData(buf);
+    drawWave(buf);
+    const hz = detectPitchHz(buf, audioCtx.sampleRate);
+    if (hz) {
+      const note = freqToNote(hz);
+      smoothCents = smoothCents * 0.7 + note.cents * 0.3;
+      const cents = Math.round(smoothCents);
+      const inTune = Math.abs(cents) <= 5;
+      noteEl.textContent = note.label;
+      noteEl.classList.toggle("in-tune", inTune);
+      centsEl.textContent = cents === 0 ? "In tune" : `${cents > 0 ? "+" : ""}${cents} cents`;
+      centsEl.classList.toggle("in-tune", inTune);
+      const clamped = Math.max(-50, Math.min(50, smoothCents));
+      needleEl.style.left = `${((clamped + 50) / 100) * 100}%`;
+      needleEl.classList.toggle("in-tune", inTune);
+      hzEl.textContent = `${hz.toFixed(1)} Hz`;
+      // Closest open string (within ~1 semitone)
+      let closest = null;
+      let best = Infinity;
+      for (const s of GUITAR_STRINGS) {
+        const diff = Math.abs(12 * Math.log2(hz / s.hz));
+        if (diff < best) { best = diff; closest = s.name; }
+      }
+      highlightString(best < 0.6 ? closest : null);
+      statusEl.textContent = "Listening";
+    } else {
+      statusEl.textContent = "Play a note…";
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  async function start() {
+    statusEl.textContent = "Starting microphone…";
+    toggleBtn.hidden = true;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 4096;
+      src.connect(analyser);
+      buf = new Float32Array(analyser.fftSize);
+      running = true;
+      statusEl.textContent = "Listening";
+      tick();
+    } catch (e) {
+      statusEl.textContent = `Microphone unavailable: ${e.message}`;
+      toggleBtn.hidden = false;
+      toggleBtn.textContent = "Try again";
+    }
+  }
+
+  function stop() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    try { stream?.getTracks().forEach(t => t.stop()); } catch { /* ignore */ }
+    try { audioCtx?.close(); } catch { /* ignore */ }
+    stream = null;
+    audioCtx = null;
+    analyser = null;
+  }
+
+  toggleBtn.onclick = () => start();
+  cleanupFns.push(stop);
+  start();
 }
 
 /* ---------------- Record (microphone) ---------------- */
