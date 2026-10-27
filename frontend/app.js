@@ -197,8 +197,36 @@ function setSidebarCollapsed(collapsed) {
   if (btn) {
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     btn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
-    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-    btn.textContent = collapsed ? "›" : "‹";
+    btn.title = collapsed ? "Expand Menu" : "Collapse Menu";
+    const icon = btn.querySelector(".sidebar-foot-icon");
+    const label = btn.querySelector(".sidebar-foot-label");
+    if (icon) icon.textContent = collapsed ? "☰" : "‹";
+    if (label) label.textContent = "Menu";
+  }
+}
+
+function setDarkMode(dark) {
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  store.set("darkMode", dark);
+  const btn = document.getElementById("sidebarTheme");
+  if (btn) {
+    const icon = btn.querySelector(".sidebar-foot-icon");
+    const label = btn.querySelector(".sidebar-foot-label");
+    if (icon) icon.textContent = dark ? "☀" : "☾";
+    if (label) label.textContent = dark ? "Light" : "Dark";
+    btn.title = dark ? "Light Mode" : "Dark Mode";
+    btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  }
+}
+
+function setSidebarSide(side) {
+  const right = side === "right";
+  document.body.classList.toggle("sidebar-right", right);
+  store.set("sidebarSide", right ? "right" : "left");
+  const btn = document.getElementById("sidebarFlip");
+  if (btn) {
+    btn.title = "Flip Sidebar";
+    btn.setAttribute("aria-label", right ? "Move sidebar to the left" : "Move sidebar to the right");
   }
 }
 
@@ -246,6 +274,8 @@ async function refreshSidebar() {
 function initSidebar() {
   const toggle = document.getElementById("sidebarToggle");
   const collapse = document.getElementById("sidebarCollapse");
+  const themeBtn = document.getElementById("sidebarTheme");
+  const flipBtn = document.getElementById("sidebarFlip");
   const backdrop = document.getElementById("sidebarBackdrop");
   const upload = document.getElementById("sidebarUpload");
   toggle?.addEventListener("click", () => {
@@ -254,12 +284,20 @@ function initSidebar() {
   collapse?.addEventListener("click", () => {
     setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
   });
+  themeBtn?.addEventListener("click", () => {
+    setDarkMode(document.documentElement.dataset.theme !== "dark");
+  });
+  flipBtn?.addEventListener("click", () => {
+    setSidebarSide(document.body.classList.contains("sidebar-right") ? "left" : "right");
+  });
   backdrop?.addEventListener("click", () => setSidebarOpen(false));
   upload?.addEventListener("click", () => {
     if (location.hash === "#/" || location.hash === "" || location.hash === "#") {
       syncSidebarChrome();
     }
   });
+  setDarkMode(!!store.get("darkMode", false));
+  setSidebarSide(store.get("sidebarSide", "left") === "right" ? "right" : "left");
   setSidebarCollapsed(!!store.get("sidebarCollapsed", false));
   refreshSidebar();
   syncSidebarChrome();

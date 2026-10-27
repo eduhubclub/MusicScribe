@@ -38,8 +38,21 @@
       <p class="sidebar-empty">Loading…</p>
     </div>
     <div class="sidebar-foot">
-      <button type="button" class="sidebar-collapse no-print" id="sidebarCollapse"
-        title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">‹</button>
+      <button type="button" class="sidebar-foot-btn no-print" id="sidebarTheme"
+        title="Dark Mode" aria-label="Switch to dark mode">
+        <span class="sidebar-foot-icon" aria-hidden="true">☾</span>
+        <span class="sidebar-foot-label">Dark</span>
+      </button>
+      <button type="button" class="sidebar-foot-btn no-print" id="sidebarFlip"
+        title="Flip Sidebar" aria-label="Flip sidebar to the other side">
+        <span class="sidebar-foot-icon" aria-hidden="true">⇄</span>
+        <span class="sidebar-foot-label">Flip</span>
+      </button>
+      <button type="button" class="sidebar-foot-btn sidebar-collapse no-print" id="sidebarCollapse"
+        title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">
+        <span class="sidebar-foot-icon" aria-hidden="true">‹</span>
+        <span class="sidebar-foot-label">Menu</span>
+      </button>
     </div>
   </aside>
   <div class="sidebar-backdrop no-print" id="sidebarBackdrop" hidden></div>
