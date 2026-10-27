@@ -1491,7 +1491,10 @@ function showSong(job) {
       if (k < 0) k = words.length - 1;
       slots[k].push({ name: s.chord, si });
     });
-    if (!slots[0].length) {
+    // Audio sheets: show the active chord at line start when it began earlier.
+    // Tab-your-own (no audio): chords stay only on the word they were placed on —
+    // otherwise one edit fills every later line via a long-lived segment.
+    if (!noAudio && !slots[0].length) {
       const si = segIndexAt(ln.start);
       const c = r.chords[si];
       if (c && c.chord !== "N") slots[0].push({ name: c.chord, si, carry: true });
@@ -1654,8 +1657,35 @@ function showSong(job) {
       if (si > 0) { segs[si - 1].end = segs[si].end; segs.splice(si, 1); } else segs[si].chord = "N";
     } else if (si != null && !isCarry) {
       segs[si].chord = name;
+      // Tab-your-own: keep the chord on this word only (shrink long leftover segments).
+      if (noAudio) {
+        const t0 = word.start;
+        const t1 = Math.max(word.end, t0 + 0.05);
+        const oldEnd = segs[si].end;
+        segs[si].start = t0;
+        segs[si].end = t1;
+        if (t1 < oldEnd - 0.01) segs.splice(si + 1, 0, { start: t1, end: oldEnd, chord: "N" });
+      }
+    } else if (noAudio) {
+      // Tab-your-own: insert a chord spanning only this word, then resume "N".
+      const t0 = word.start;
+      const t1 = Math.max(word.end, t0 + 0.05);
+      const i = segIndexAt(t0);
+      const s = segs[i];
+      const oldEnd = s.end;
+      if (Math.abs(s.start - t0) < 0.05 && s.chord === "N") {
+        s.chord = name;
+        s.end = t1;
+        if (t1 < oldEnd - 0.01) segs.splice(i + 1, 0, { start: t1, end: oldEnd, chord: "N" });
+      } else {
+        s.end = t0;
+        const inserted = [{ start: t0, end: t1, chord: name }];
+        if (t1 < oldEnd - 0.01) inserted.push({ start: t1, end: oldEnd, chord: "N" });
+        segs.splice(i + 1, 0, ...inserted);
+        if (s.end - s.start < 0.01) segs.splice(i, 1);
+      }
     } else {
-      // Add a chord change at this word.
+      // Audio sheet: add a chord change at this word (continues until the next change).
       const t = word.start;
       const i = segIndexAt(t);
       const s = segs[i];
