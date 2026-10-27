@@ -96,14 +96,17 @@ button, select, input { font: inherit; color: inherit; }
   font-size: 15px;
   font-weight: 600;
   border-radius: 12px;
-  border: none;
-  box-shadow: none;
+  border: none !important;
+  outline: none;
+  box-shadow: none !important;
   cursor: pointer;
 }
 .splash-cta.primary,
-.splash-cta.primary:hover {
-  border: none;
-  box-shadow: none;
+.splash-cta.primary:hover,
+.splash-cta.primary:focus {
+  border: none !important;
+  outline: none;
+  box-shadow: none !important;
 }
 body.splash-active { overflow: hidden; }
 body.splash-active .sidebar,
