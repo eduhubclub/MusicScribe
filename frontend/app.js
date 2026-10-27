@@ -199,6 +199,28 @@ function setSidebarOpen(open) {
   if (backdrop) backdrop.hidden = !open;
 }
 
+function shortTuningLabel(name) {
+  if (name === "Standard") return "Std";
+  if (name === "Half step down") return "½↓";
+  if (name === "Whole step down") return "1↓";
+  if (name.startsWith("Drop ")) return "Dr" + name.slice(5).replace(/\s/g, "");
+  if (name.startsWith("Open ")) return "O" + name.slice(5, 6);
+  return name.slice(0, 3);
+}
+
+function syncSidebarToolDensity() {
+  const collapsed = document.body.classList.contains("sidebar-collapsed");
+  document.querySelectorAll("#sidebarMeta select.tool-select option").forEach(opt => {
+    if (!opt.dataset.full) opt.dataset.full = opt.textContent;
+    if (!opt.dataset.short) {
+      const sel = opt.closest("select");
+      if (sel?.id === "capo") opt.dataset.short = opt.value === "0" ? "C0" : `C${opt.value}`;
+      else opt.dataset.short = shortTuningLabel(opt.dataset.full || opt.value || opt.textContent);
+    }
+    opt.textContent = collapsed ? opt.dataset.short : opt.dataset.full;
+  });
+}
+
 function setSidebarCollapsed(collapsed) {
   document.body.classList.toggle("sidebar-collapsed", collapsed);
   store.set("sidebarCollapsed", collapsed);
@@ -212,6 +234,7 @@ function setSidebarCollapsed(collapsed) {
     if (icon) icon.textContent = collapsed ? "☰" : "‹";
     if (label) label.textContent = "Menu";
   }
+  syncSidebarToolDensity();
 }
 
 function setDarkMode(dark) {
@@ -740,24 +763,49 @@ function showSong(job) {
         ${r.confidence ? confOverallBtn(r.confidence.overall, r.confidence.disclaimer) : ""}
       </div>
       <hr class="sidebar-meta-rule">
-      <div class="sidebar-song-tools song-tools no-print">
+      <div class="sidebar-song-tools no-print">
         <div class="controls">
-          <select id="tuning" title="Your guitar's tuning: chord names, diagrams and tab follow it">
-            ${TUNINGS.map(([n]) => `<option>${n}</option>`).join("")}
+          <select id="tuning" class="tool-select" title="Your guitar's tuning: chord names, diagrams and tab follow it" aria-label="Tuning">
+            ${TUNINGS.map(([n]) => `<option value="${esc(n)}" data-short="${n === "Standard" ? "Std" : esc(n.slice(0, 3))}">${n}</option>`).join("")}
           </select>
-          <select id="capo" title="Capo">
-            ${Array.from({ length: 10 }, (_, c) => `<option value="${c}">${c ? `Capo ${c}` : "No capo"}</option>`).join("")}
+          <select id="capo" class="tool-select" title="Capo" aria-label="Capo">
+            ${Array.from({ length: 10 }, (_, c) => `<option value="${c}" data-short="${c ? `C${c}` : "C0"}">${c ? `Capo ${c}` : "No capo"}</option>`).join("")}
           </select>
           <div class="transpose" title="Transpose to another key (resets when you change tuning or capo)">
-            <button type="button" id="down">−</button><span id="semis"></span><button type="button" id="up">+</button>
+            <button type="button" id="down" aria-label="Transpose down">−</button>
+            <span id="semis"></span>
+            <button type="button" id="up" aria-label="Transpose up">+</button>
           </div>
-          <label title="Show plain major/minor chords (Gsus2 → G, Dmaj7 → D)"><input type="checkbox" id="simple"> Simple chords</label>
-          <label title="Keep the current line in view while playing (pauses briefly when you scroll yourself)"><input type="checkbox" id="follow"> Auto-scroll</label>
-          <button type="button" id="keysBtn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">🎹 Keyboard</button>
-          <button type="button" id="export">Export .txt</button>
-          ${(job.manual || r.manual || r.no_audio) ? "" : `<button type="button" id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
-          <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>`}
-          <button type="button" id="print">Print</button>
+          <label class="tool-check" title="Show plain major/minor chords (Gsus2 → G, Dmaj7 → D)">
+            <input type="checkbox" id="simple">
+            <span class="tool-full">Simple chords</span>
+            <span class="tool-compact" aria-hidden="true">Sim</span>
+          </label>
+          <label class="tool-check" title="Keep the current line in view while playing (pauses briefly when you scroll yourself)">
+            <input type="checkbox" id="follow">
+            <span class="tool-full">Auto-scroll</span>
+            <span class="tool-compact" aria-hidden="true">Auto</span>
+          </label>
+          <button type="button" id="keysBtn" class="tool-btn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">
+            <span class="tool-full">Keyboard</span>
+            <span class="tool-compact" aria-hidden="true">Kb</span>
+          </button>
+          <button type="button" id="export" class="tool-btn" title="Export .txt">
+            <span class="tool-full">Export .txt</span>
+            <span class="tool-compact" aria-hidden="true">TXT</span>
+          </button>
+          ${(job.manual || r.manual || r.no_audio) ? "" : `<button type="button" id="pdf" class="tool-btn" title="Download a printable PDF (chords + guitar by default)">
+            <span class="tool-full">Export PDF</span>
+            <span class="tool-compact" aria-hidden="true">PDF</span>
+          </button>
+          <a class="button tool-btn" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">
+            <span class="tool-full">MIDI</span>
+            <span class="tool-compact" aria-hidden="true">MID</span>
+          </a>`}
+          <button type="button" id="print" class="tool-btn" title="Print">
+            <span class="tool-full">Print</span>
+            <span class="tool-compact" aria-hidden="true">Prn</span>
+          </button>
         </div>
       </div>`;
   }
@@ -877,9 +925,15 @@ function showSong(job) {
   const capoSel = document.getElementById("capo");
   const syncTuningControls = () => {
     r.tuning.name = TUNING_ALIASES[r.tuning.name] || r.tuning.name;
-    if (!TUNINGS.some(([n]) => n === r.tuning.name)) tuningSel.add(new Option(r.tuning.name));
+    if (!TUNINGS.some(([n]) => n === r.tuning.name)) {
+      const opt = new Option(r.tuning.name, r.tuning.name);
+      opt.dataset.full = r.tuning.name;
+      opt.dataset.short = shortTuningLabel(r.tuning.name);
+      tuningSel.add(opt);
+    }
     tuningSel.value = r.tuning.name;
     capoSel.value = String(r.tuning.capo);
+    syncSidebarToolDensity();
   };
   async function setTuning(name, capo) {
     const strings = (TUNINGS.find(([n]) => n === name) || [name, r.tuning.strings])[1];
