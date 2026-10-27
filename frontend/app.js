@@ -728,6 +728,8 @@ function showSong(job) {
   if (metaEl) {
     metaEl.hidden = false;
     metaEl.innerHTML = `
+      <div class="sidebar-song-title" id="sidebarSongTitle" title="${esc(job.title)}">${esc(job.title)}</div>
+      <hr class="sidebar-meta-rule">
       <div class="facts">
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
@@ -1048,6 +1050,11 @@ function showSong(job) {
       if (t === job.title) return;
       job.title = t;
       api.rename(id, t).catch(() => {});
+      const sideTitle = document.getElementById("sidebarSongTitle");
+      if (sideTitle) {
+        sideTitle.textContent = t;
+        sideTitle.title = t;
+      }
       refreshSidebar();
     });
   }
