@@ -154,6 +154,13 @@ function hidePlaybar() {
   document.body.classList.remove("has-playbar");
 }
 
+function clearSidebarMeta() {
+  const el = document.getElementById("sidebarMeta");
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
 function cleanup() {
   timers.forEach(clearTimeout);
   timers = [];
@@ -161,6 +168,7 @@ function cleanup() {
   cleanupFns = [];
   closeConfidenceModal();
   hidePlaybar();
+  clearSidebarMeta();
 }
 
 function route() {
@@ -231,8 +239,8 @@ function setSidebarSide(side) {
 }
 
 function syncSidebarChrome() {
-  const upload = document.getElementById("sidebarUpload");
-  const tabOwn = document.getElementById("sidebarTabOwn");
+  const upload = document.getElementById("headerUpload");
+  const tabOwn = document.getElementById("headerTabOwn");
   const onHome = !currentJobId() && !/^#\/tab-your-own/.test(location.hash);
   const onTabOwn = /^#\/tab-your-own/.test(location.hash);
   if (upload) upload.classList.toggle("on", onHome);
@@ -277,7 +285,7 @@ function initSidebar() {
   const themeBtn = document.getElementById("sidebarTheme");
   const flipBtn = document.getElementById("sidebarFlip");
   const backdrop = document.getElementById("sidebarBackdrop");
-  const upload = document.getElementById("sidebarUpload");
+  const upload = document.getElementById("headerUpload");
   toggle?.addEventListener("click", () => {
     setSidebarOpen(!document.body.classList.contains("sidebar-open"));
   });
@@ -663,8 +671,10 @@ function showSong(job) {
     return out;
   }
 
-  app.innerHTML = `
-    <div class="song-head">
+  const metaEl = document.getElementById("sidebarMeta");
+  if (metaEl) {
+    metaEl.hidden = false;
+    metaEl.innerHTML = `
       <div class="facts">
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
@@ -672,8 +682,10 @@ function showSong(job) {
         ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Source: ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
         ${(job.manual || r.manual || r.no_audio) ? `<span class="source-badge">Tab your own</span>` : ""}
         ${r.confidence ? confOverallBtn(r.confidence.overall, r.confidence.disclaimer) : ""}
-      </div>
-    </div>
+      </div>`;
+  }
+
+  app.innerHTML = `
     <div class="song-tools no-print">
       <div class="controls">
         <select id="tuning" title="Your guitar's tuning: chord names, diagrams and tab follow it">
@@ -789,8 +801,10 @@ function showSong(job) {
   }
 
   function updateHeader() {
-    app.querySelector("#key").textContent = keyName();
-    app.querySelector("#semis").textContent = st.semis ? (st.semis > 0 ? `+${st.semis}` : st.semis) : "0";
+    const keyEl = document.getElementById("key");
+    if (keyEl) keyEl.textContent = keyName();
+    const semisEl = app.querySelector("#semis");
+    if (semisEl) semisEl.textContent = st.semis ? (st.semis > 0 ? `+${st.semis}` : st.semis) : "0";
   }
   const setSemis = d => {
     st.semis = ((st.semis + d + 17) % 12) - 5; // keep within -5..+6
@@ -1844,7 +1858,7 @@ function showSong(job) {
   render();
   tick();
 
-  const confBtn = app.querySelector("#confOverall");
+  const confBtn = document.getElementById("confOverall");
   if (confBtn && r.confidence) {
     const markSeen = () => store.set(`confModalSeen.${id}`, true);
     confBtn.onclick = () => openConfidenceModal(r.confidence);

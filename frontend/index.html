@@ -23,16 +23,9 @@
         <img class="brand-wizard" src="/assets/wizard-sax.png" alt="" width="40" height="48">
       </a>
     </div>
-    <div class="sidebar-head">
+    <div class="sidebar-meta no-print" id="sidebarMeta" hidden></div>
+    <div class="sidebar-lib">
       <span class="sidebar-label">Library</span>
-      <div class="sidebar-actions">
-        <a class="sidebar-upload" href="#/" id="sidebarUpload" title="Upload a new song">
-          <span class="sidebar-action-label">Upload</span>
-        </a>
-        <a class="sidebar-tabown" href="#/tab-your-own" id="sidebarTabOwn" title="Paste lyrics and add your own chords">
-          <span class="sidebar-action-label">Tab your own</span>
-        </a>
-      </div>
     </div>
     <div class="sidebar-list" id="sidebarJobs" role="navigation" aria-label="Songs on this device">
       <p class="sidebar-empty">Loading…</p>
@@ -60,6 +53,10 @@
     <header class="topbar">
       <button type="button" class="sidebar-toggle no-print" id="sidebarToggle" aria-label="Open library menu" aria-controls="sidebar" aria-expanded="false">☰</button>
       <a href="#/" class="brand" title="Home"><span class="brand-text">MusicScribe</span></a>
+      <div class="topbar-actions no-print">
+        <a class="topbar-upload" href="#/" id="headerUpload" title="Upload a new song">Upload</a>
+        <a class="topbar-tabown" href="#/tab-your-own" id="headerTabOwn" title="Paste lyrics and add your own chords">Tab your own</a>
+      </div>
     </header>
     <main id="app"></main>
   </div>

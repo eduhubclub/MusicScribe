@@ -157,9 +157,9 @@ select, input[type=text] {
 }
 
 .shell { min-width: 0; }
-/* Header — EduHub NAV_HEIGHT + 1.5px outline */
+/* Header — EduHub NAV_HEIGHT + 1.5px outline; library actions right-aligned */
 .topbar {
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center;
   height: var(--edu-nav-h); min-height: var(--edu-nav-h);
   padding: 0 12px;
   border-bottom: var(--edu-border);
@@ -167,6 +167,32 @@ select, input[type=text] {
   color: var(--chrome-text);
   position: sticky; top: 0; z-index: 20;
   gap: 10px;
+}
+.topbar-actions {
+  margin-left: auto;
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end;
+  gap: 8px;
+}
+.topbar-upload, .topbar-tabown {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 36px; padding: 8px 14px; border-radius: 12px;
+  text-decoration: none; font-size: 13px; font-weight: 600; line-height: 1.25;
+  border: var(--edu-border);
+}
+.topbar-upload {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.topbar-upload:hover { opacity: 0.92; }
+.topbar-upload.on {
+  background: var(--chrome-active); color: var(--edu-blue-700); border-color: var(--accent);
+}
+.topbar-tabown {
+  background: transparent; color: var(--chrome-muted);
+}
+.topbar-tabown:hover { background: var(--chrome-hover); color: var(--edu-blue-600); }
+.topbar-tabown.on {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
 }
 .brand {
   text-decoration: none; font-weight: 700; font-size: 1.125rem;
@@ -334,24 +360,11 @@ html[data-theme="dark"] #sidebarTheme {
   html[data-theme="dark"] body.sidebar-collapsed .brand-wizard {
     filter: brightness(0) invert(1);
   }
-  body.sidebar-collapsed .sidebar-head {
-    padding: 8px 6px 6px;
-    gap: 6px;
+  body.sidebar-collapsed .sidebar-meta,
+  body.sidebar-collapsed .sidebar-lib,
+  body.sidebar-collapsed .sidebar-label {
+    display: none;
   }
-  body.sidebar-collapsed .sidebar-actions {
-    flex-direction: column;
-    padding: 0;
-    gap: 6px;
-  }
-  body.sidebar-collapsed .sidebar-upload,
-  body.sidebar-collapsed .sidebar-tabown {
-    flex: 0 0 auto;
-    min-height: 36px;
-    padding: 6px 0;
-    font-size: 14px;
-  }
-  body.sidebar-collapsed .sidebar-upload::before { content: "↑"; }
-  body.sidebar-collapsed .sidebar-tabown::before { content: "✎"; }
   body.sidebar-collapsed .sidebar-list {
     padding: 4px 6px 8px;
     align-items: center;
@@ -377,39 +390,33 @@ html[data-theme="dark"] #sidebarTheme {
   }
 }
 
-.sidebar-head {
-  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
-  padding: 12px 8px 10px;
+.sidebar-meta {
   flex: 0 0 auto;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 12px 10px;
+  border-bottom: var(--edu-border-thin);
+  color: var(--chrome-muted);
+  font-size: 12px; line-height: 1.35;
+}
+.sidebar-meta[hidden] { display: none !important; }
+.sidebar-meta .facts {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  font-size: 12px; color: var(--chrome-muted);
+}
+.sidebar-meta .facts b { color: var(--chrome-text); font-weight: 600; }
+.sidebar-meta .source-badge {
+  align-self: flex-start;
+  font-size: 11px;
+}
+.sidebar-meta .conf-badge { align-self: flex-start; }
+.sidebar-lib {
+  flex: 0 0 auto;
+  padding: 10px 8px 4px;
 }
 .sidebar-label {
   font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--chrome-muted);
   padding: 0 8px;
-}
-.sidebar-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
-.sidebar-upload, .sidebar-tabown {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex: 1 1 auto;
-  min-height: 36px;
-  padding: 8px 12px; border-radius: 12px; text-decoration: none;
-  font-size: 13px; font-weight: 600; line-height: 1.25;
-  border: var(--edu-border);
-}
-.sidebar-upload {
-  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-}
-.sidebar-upload:hover { opacity: 0.92; }
-.sidebar-upload.on {
-  background: var(--chrome-active); color: var(--edu-blue-700); border-color: var(--accent);
-}
-.sidebar-tabown {
-  background: transparent; color: var(--edu-slate-500);
-}
-.sidebar-tabown:hover { background: var(--edu-slate-100); color: var(--edu-blue-600); }
-.sidebar-tabown.on {
-  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
 }
 .sidebar-list {
   flex: 1 1 auto; overflow: auto; padding: 8px 8px 12px;
