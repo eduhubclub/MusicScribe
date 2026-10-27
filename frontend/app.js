@@ -799,7 +799,7 @@ function showRecord() {
     return o;
   };
   async function upload(file) {
-    status.innerHTML = `<span class="upload-busy"><img src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
+    status.innerHTML = `<span class="upload-busy"><img class="wizard-line-art" src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
     try {
       const meta = await api.upload(file, currentOpts());
       location.hash = `#/job/${meta.id}`;
@@ -990,7 +990,7 @@ function showLibrary() {
   };
 
   async function upload(file) {
-    status.innerHTML = `<span class="upload-busy"><img src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
+    status.innerHTML = `<span class="upload-busy"><img class="wizard-line-art" src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
     try {
       const meta = await api.upload(file, currentOpts());
       location.hash = `#/job/${meta.id}`;
@@ -1076,8 +1076,8 @@ function showProgress(job) {
       : esc(job.stage_label || "Working…");
   app.innerHTML = `
     <div class="progress-card loading-card">
-      <img class="loading-hero" src="/assets/wizard-sax.webp?v=2" alt="" width="220" height="256"
-           onerror="this.onerror=null;this.src='/assets/wizard-sax.png?v=2'">
+      <img class="loading-hero wizard-line-art" src="/assets/wizard-sax.webp?v=3" alt="" width="220" height="256"
+           onerror="this.onerror=null;this.src='/assets/wizard-sax.png?v=3'">
       <h2 style="margin:0">${esc(job.title)}</h2>
       <p class="facts" style="margin:6px 0 0">${statusLine}</p>
       <div class="progress-row">

@@ -1083,9 +1083,19 @@ html[data-theme="dark"] button.primary {
 /* Progress page */
 .progress-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; }
 .loading-card { text-align: center; max-width: 520px; margin: 0 auto; }
+/* Wizard sax gif/webp is light line art — force black lines (same idea as brand/splash) */
+.wizard-line-art,
+.loading-card .loading-hero,
+.upload-busy img {
+  filter: brightness(0);
+}
+html[data-theme="dark"] .wizard-line-art,
+html[data-theme="dark"] .loading-card .loading-hero,
+html[data-theme="dark"] .upload-busy img {
+  filter: brightness(0) invert(1);
+}
 .loading-card .loading-hero {
   width: min(220px, 52vw); height: auto; display: block; margin: 0 auto 16px;
-  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.5));
 }
 /* Plain rectangular progress — no thumb, marker, ::after art, or images on the bar */
 .progress-row {
