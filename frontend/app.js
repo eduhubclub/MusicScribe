@@ -92,45 +92,15 @@ const noteHz = (name, octave) => {
   const i = NOTE_NAMES.indexOf(name);
   return midiToHz((octave + 1) * 12 + i);
 };
-const TUNER_ICON = (paths) =>
-  `<span class="tuner-ico" aria-hidden="true"><svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></span>`;
+// Lucide names for tuner instrument toggles (see frontend/icons.js + vendor/lucide.min.js).
 const TUNER_ICONS = {
-  // Classic guitar silhouette: body + neck + headstock
-  guitar: TUNER_ICON(`
-    <ellipse cx="12" cy="20" rx="7.5" ry="8"/><circle cx="12" cy="20" r="2.2"/>
-    <path d="M12 12V5.5"/><path d="M9.5 5.5h5"/><path d="M10.2 4.2v2.2M13.8 4.2v2.2"/>
-    <path d="M9.5 16.5h5M9.5 20h5M9.5 23.5h5"/>`),
-  // Longer bass body / thicker neck cue
-  bass: TUNER_ICON(`
-    <path d="M7 22c0-5 3.2-8.5 7-8.5s7 3.5 7 8.5c0 3.2-2 6-7 6s-7-2.8-7-6z"/>
-    <circle cx="14" cy="22" r="2.4"/><path d="M14 13.5V4.8"/><path d="M11.2 4.8h5.6"/>
-    <path d="M12 3.5v2.4M16 3.5v2.4"/><path d="M11 19h6M11 22.5h6"/>`),
-  // Small uke: squat body, short neck
-  ukulele: TUNER_ICON(`
-    <ellipse cx="16" cy="21" rx="6.2" ry="6.8"/><circle cx="16" cy="21" r="1.8"/>
-    <path d="M16 14.2V7.2"/><path d="M13.8 7.2h4.4"/><path d="M14.5 5.8v2.2M17.5 5.8v2.2"/>
-    <path d="M13.8 18.5h4.4M13.8 21.5h4.4"/>`),
-  // Mandolin: teardrop / bowl body
-  mandolin: TUNER_ICON(`
-    <path d="M16 28c-5.2 0-8.5-3.8-8.5-8.2 0-5.4 4.2-9.3 8.5-13.8 4.3 4.5 8.5 8.4 8.5 13.8 0 4.4-3.3 8.2-8.5 8.2z"/>
-    <circle cx="16" cy="20.5" r="2"/><path d="M16 12.5V6.5"/><path d="M13.8 6.5h4.4"/>
-    <path d="M14.4 5.2v2.2M17.6 5.2v2.2"/>`),
-  // Violin: f-holes + scroll cue
-  violin: TUNER_ICON(`
-    <path d="M11 26c-3.2-1.2-4.2-4.2-3.2-7.2 1.2-3.6 4.4-4.6 4.4-7.6V7.2h7.6v4c0 3 3.2 4 4.4 7.6 1 3-0.1 6-3.2 7.2"/>
-    <path d="M12.5 18.5c1.2 1.4 2.2 1.4 3.5 0M16 18.5c1.2 1.4 2.2 1.4 3.5 0"/>
-    <path d="M16 11.2V5.5"/><path d="M14 5.5c0-1.4 1-2.3 2-2.3s2 .9 2 2.3"/><circle cx="16" cy="20.2" r="1.5"/>`),
-  // Viola: similar, slightly wider body cue
-  viola: TUNER_ICON(`
-    <path d="M10.2 26.2c-3.5-1.1-4.6-4.4-3.4-7.6 1.3-3.5 4.6-4.4 4.6-7.4V7h9.2v4.2c0 3 3.3 3.9 4.6 7.4 1.2 3.2.1 6.5-3.4 7.6"/>
-    <path d="M12.2 18.2c1.3 1.5 2.5 1.5 3.8 0M16 18.2c1.3 1.5 2.5 1.5 3.8 0"/>
-    <path d="M16 11V5.2"/><path d="M13.8 5.2c0-1.5 1.1-2.4 2.2-2.4s2.2.9 2.2 2.4"/><circle cx="16" cy="20.5" r="1.7"/>`),
-  // Cello: taller body, endpin
-  cello: TUNER_ICON(`
-    <path d="M10.5 23.5c-3-1-4-4-3-7 1.2-3.4 4.2-4.2 4.2-7V6.5h9.6V9.5c0 2.8 3 3.6 4.2 7 1 3 0 6-3 7"/>
-    <path d="M12.5 16.8c1.2 1.4 2.3 1.4 3.5 0M16 16.8c1.2 1.4 2.3 1.4 3.5 0"/>
-    <path d="M16 9.5V4.8"/><path d="M14 4.8c0-1.3 1-2.1 2-2.1s2 .8 2 2.1"/>
-    <circle cx="16" cy="18.5" r="1.5"/><path d="M16 23.5v5.2"/>`),
+  guitar: "guitar",
+  bass: "audio-lines",
+  ukulele: "music-2",
+  mandolin: "music-3",
+  violin: "music",
+  viola: "music-4",
+  cello: "audio-waveform",
 };
 const TUNER_INSTRUMENTS = [
   {
@@ -396,6 +366,13 @@ function syncSidebarToolDensity() {
   });
 }
 
+function setFootIcon(btn, name) {
+  const host = btn?.querySelector(".sidebar-foot-icon");
+  if (!host) return;
+  if (window.MSIcons) MSIcons.set(host, name);
+  else host.setAttribute("data-ms-icon", name);
+}
+
 function setSidebarCollapsed(collapsed) {
   document.body.classList.toggle("sidebar-collapsed", collapsed);
   store.set("sidebarCollapsed", collapsed);
@@ -404,9 +381,8 @@ function setSidebarCollapsed(collapsed) {
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     btn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
     btn.title = collapsed ? "Expand Menu" : "Collapse Menu";
-    const icon = btn.querySelector(".sidebar-foot-icon");
+    setFootIcon(btn, collapsed ? "menu" : "panel-left-close");
     const label = btn.querySelector(".sidebar-foot-label");
-    if (icon) icon.textContent = collapsed ? "☰" : "‹";
     if (label) label.textContent = "Menu";
   }
   syncSidebarToolDensity();
@@ -417,9 +393,8 @@ function setDarkMode(dark) {
   store.set("darkMode", dark);
   const btn = document.getElementById("sidebarTheme");
   if (btn) {
-    const icon = btn.querySelector(".sidebar-foot-icon");
+    setFootIcon(btn, dark ? "sun" : "moon");
     const label = btn.querySelector(".sidebar-foot-label");
-    if (icon) icon.textContent = dark ? "☀" : "☾";
     if (label) label.textContent = dark ? "Light" : "Dark";
     btn.title = dark ? "Light Mode" : "Dark Mode";
     btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
@@ -504,6 +479,19 @@ function initSidebar() {
   setDarkMode(!!store.get("darkMode", false));
   setSidebarSide(store.get("sidebarSide", "left") === "right" ? "right" : "left");
   setSidebarCollapsed(!!store.get("sidebarCollapsed", false));
+  // Hydrate any remaining data-ms-icon hosts (e.g. Flip) + header Lucide marks.
+  document.querySelectorAll("[data-ms-icon]").forEach(host => {
+    if (host.querySelector("svg, [data-lucide]")) return;
+    const name = host.getAttribute("data-ms-icon");
+    if (name) setFootIcon(host.closest("button") || host.parentElement, name);
+  });
+  // Flip is not updated by setDarkMode/collapse — paint from its data-ms-icon.
+  const flipIcon = document.querySelector("#sidebarFlip .sidebar-foot-icon");
+  if (flipIcon && !flipIcon.querySelector("svg")) {
+    const name = flipIcon.getAttribute("data-ms-icon") || "arrow-left-right";
+    if (window.MSIcons) MSIcons.set(flipIcon, name);
+  }
+  window.MSIcons?.paint(document);
   refreshSidebar();
   syncSidebarChrome();
 }
@@ -561,27 +549,28 @@ function showCreate() {
       </header>
       <div class="create-tiles" role="list">
         <a class="create-tile" href="#/upload" role="listitem" title="Upload an audio or video file">
-          <span class="create-tile-mark" aria-hidden="true">↑</span>
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("upload", "create-tile-ico") : "↑"}</span>
           <span class="create-tile-label">Upload</span>
           <span class="create-tile-desc">MP3, WAV, FLAC, M4A, or video</span>
         </a>
         <a class="create-tile" href="#/record" role="listitem" title="Record with your microphone">
-          <span class="create-tile-mark" aria-hidden="true">●</span>
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("mic", "create-tile-ico") : "●"}</span>
           <span class="create-tile-label">Record</span>
           <span class="create-tile-desc">Capture audio from your mic</span>
         </a>
         <a class="create-tile" href="#/tab-your-own" role="listitem" title="Paste lyrics and add your own chords">
-          <span class="create-tile-mark" aria-hidden="true">♪</span>
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("file-music", "create-tile-ico") : "♪"}</span>
           <span class="create-tile-label">Tab</span>
           <span class="create-tile-desc">Lyrics and chords, no audio</span>
         </a>
         <a class="create-tile" href="#/tuner" role="listitem" title="Tune your guitar with the microphone">
-          <span class="create-tile-mark" aria-hidden="true">♮</span>
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("guitar", "create-tile-ico") : "♮"}</span>
           <span class="create-tile-label">Tuner</span>
           <span class="create-tile-desc">Guitar, bass, uke, strings…</span>
         </a>
       </div>
     </section>`;
+  window.MSIcons?.paint(app);
 }
 
 /* ---------------- Instrument tuner (mic pitch) ---------------- */
@@ -601,7 +590,7 @@ function showTuner() {
           <button type="button" class="tuner-inst-btn${i.id === instrument.id ? " on" : ""}"
             role="radio" aria-checked="${i.id === instrument.id ? "true" : "false"}"
             data-id="${i.id}" title="${esc(i.label)}" aria-label="${esc(i.label)}">
-            ${TUNER_ICONS[i.id] || ""}
+            <span class="tuner-ico">${window.MSIcons ? MSIcons.el(TUNER_ICONS[i.id] || "music") : ""}</span>
             <span class="tuner-inst-label">${esc(i.label)}</span>
           </button>`).join("")}
       </div>
@@ -729,6 +718,7 @@ function showTuner() {
     btn.onclick = () => selectInstrument(btn.dataset.id);
   });
   renderStrings();
+  window.MSIcons?.paint(app);
 
   async function start() {
     statusEl.textContent = "Starting microphone…";

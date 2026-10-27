@@ -33,17 +33,17 @@
     <div class="sidebar-foot">
       <button type="button" class="sidebar-foot-btn no-print" id="sidebarTheme"
         title="Dark Mode" aria-label="Switch to dark mode">
-        <span class="sidebar-foot-icon" aria-hidden="true">☾</span>
+        <span class="sidebar-foot-icon" data-ms-icon="moon" aria-hidden="true"></span>
         <span class="sidebar-foot-label">Dark</span>
       </button>
       <button type="button" class="sidebar-foot-btn no-print" id="sidebarFlip"
         title="Flip Sidebar" aria-label="Flip sidebar to the other side">
-        <span class="sidebar-foot-icon" aria-hidden="true">⇄</span>
+        <span class="sidebar-foot-icon" data-ms-icon="arrow-left-right" aria-hidden="true"></span>
         <span class="sidebar-foot-label">Flip</span>
       </button>
       <button type="button" class="sidebar-foot-btn sidebar-collapse no-print" id="sidebarCollapse"
         title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">
-        <span class="sidebar-foot-icon" aria-hidden="true">‹</span>
+        <span class="sidebar-foot-icon" data-ms-icon="panel-left-close" aria-hidden="true"></span>
         <span class="sidebar-foot-label">Menu</span>
       </button>
     </div>
@@ -51,16 +51,26 @@
   <div class="sidebar-backdrop no-print" id="sidebarBackdrop" hidden></div>
   <div class="shell">
     <header class="topbar">
-      <button type="button" class="sidebar-toggle no-print" id="sidebarToggle" aria-label="Open library menu" aria-controls="sidebar" aria-expanded="false">☰</button>
+      <button type="button" class="sidebar-toggle no-print" id="sidebarToggle" aria-label="Open library menu" aria-controls="sidebar" aria-expanded="false">
+        <i data-lucide="menu" class="ms-icon" aria-hidden="true"></i>
+      </button>
       <a href="#/create" class="brand" title="Home"><span class="brand-text">MusicScribe</span></a>
       <div class="topbar-actions no-print">
-        <a class="topbar-library" href="#/library" id="headerLibrary" title="Browse all songs">Library</a>
-        <a class="topbar-create" href="#/create" id="headerCreate" title="Upload, record, or tab your own">Create</a>
+        <a class="topbar-library" href="#/library" id="headerLibrary" title="Browse all songs">
+          <i data-lucide="library" class="ms-icon" aria-hidden="true"></i>
+          <span>Library</span>
+        </a>
+        <a class="topbar-create" href="#/create" id="headerCreate" title="Upload, record, or tab your own">
+          <i data-lucide="plus" class="ms-icon" aria-hidden="true"></i>
+          <span>Create</span>
+        </a>
       </div>
     </header>
     <main id="app"></main>
   </div>
   <footer id="playbar" class="playbar" hidden></footer>
+  <script src="vendor/lucide.min.js"></script>
+  <script src="icons.js"></script>
   <script src="chords.js"></script>
   <script src="local-store.js"></script>
   <script src="inference-stub.js"></script>

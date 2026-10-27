@@ -173,8 +173,33 @@ select, input[type=text] {
   display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end;
   gap: 8px;
 }
+/* Lucide (vendored) — shared stroke icons for chrome + Create/tuner */
+.ms-icon {
+  display: inline-block;
+  width: 1.15em; height: 1.15em;
+  flex: 0 0 auto;
+  vertical-align: -0.15em;
+  stroke: currentColor;
+}
+.sidebar-foot-icon .ms-icon,
+.sidebar-toggle .ms-icon {
+  width: 18px; height: 18px;
+}
+.topbar-actions .ms-icon {
+  width: 16px; height: 16px;
+  margin-right: 2px;
+}
+.create-tile-mark .ms-icon,
+.create-tile-ico {
+  width: 28px; height: 28px;
+  color: var(--edu-blue-600);
+}
+.tuner-ico .ms-icon {
+  width: 22px; height: 22px;
+}
+
 .topbar-library, .topbar-create {
-  display: inline-flex; align-items: center; justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 36px; padding: 8px 14px; border-radius: 12px;
   text-decoration: none; font-size: 13px; font-weight: 600; line-height: 1.25;
   border: var(--edu-border);
@@ -235,9 +260,10 @@ select, input[type=text] {
   outline-offset: 3px;
 }
 .create-tile-mark {
-  font-size: 28px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 28px; line-height: 1;
   color: var(--edu-blue-600);
-  font-weight: 700;
+  font-size: 28px; font-weight: 700;
 }
 .create-tile-label {
   font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
