@@ -15,8 +15,6 @@
         <img class="brand-wizard" src="/assets/wizard-sax.png" alt="" width="40" height="48">
         <span class="brand-text">MusicScribe</span>
       </a>
-      <button type="button" class="sidebar-collapse no-print" id="sidebarCollapse"
-        title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">‹</button>
     </div>
     <div class="sidebar-head">
       <span class="sidebar-label">Library</span>
@@ -32,7 +30,11 @@
     <div class="sidebar-list" id="sidebarJobs" role="navigation" aria-label="Songs on this device">
       <p class="sidebar-empty">Loading…</p>
     </div>
-    <div class="sidebar-foot">On this device</div>
+    <div class="sidebar-foot">
+      <button type="button" class="sidebar-collapse no-print" id="sidebarCollapse"
+        title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">‹</button>
+      <span class="sidebar-foot-label">On this device</span>
+    </div>
   </aside>
   <div class="sidebar-backdrop no-print" id="sidebarBackdrop" hidden></div>
   <div class="shell">
