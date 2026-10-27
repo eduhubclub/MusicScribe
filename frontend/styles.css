@@ -121,22 +121,36 @@ body.has-playbar main { padding-bottom: 110px; }
 
 /* Progress page */
 .progress-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; }
-.wizard-loading { text-align: center; max-width: 520px; margin: 0 auto; }
-.wizard-loading .wizard-art {
+.loading-card { text-align: center; max-width: 520px; margin: 0 auto; }
+.loading-card .loading-hero {
   width: min(220px, 52vw); height: auto; display: block; margin: 0 auto 16px;
   filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.5));
 }
-.wizard-track {
-  height: 10px; margin: 22px 18px 6px;
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
+/* Plain rectangular progress — no thumb, marker, ::after art, or images on the bar */
+.progress-row {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 8px 4px;
+}
+.progress-bar {
+  flex: 1; height: 8px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px;
   overflow: hidden;
 }
-.wizard-track .fill {
-  display: block; height: 100%; border-radius: inherit;
-  background: linear-gradient(90deg, #c98a17, var(--accent));
+.progress-bar::before,
+.progress-bar::after,
+.progress-fill::before,
+.progress-fill::after { content: none !important; display: none !important; }
+.progress-fill {
+  display: block; height: 100%; width: 0;
+  border-radius: 0;
+  background: var(--accent);
   transition: width 0.45s ease;
+  background-image: none !important;
 }
-.wizard-pct { font: 600 13px var(--mono); color: var(--muted); margin: 4px 0 0; }
+.progress-pct {
+  flex: 0 0 auto; min-width: 3.2em; text-align: right;
+  font: 600 13px var(--mono); color: var(--muted);
+}
 .upload-busy {
   display: inline-flex; align-items: center; gap: 10px; color: var(--muted);
 }

@@ -309,15 +309,17 @@ function showProgress(job) {
       ? "Waiting in queue…"
       : esc(job.stage_label || "Working…");
   app.innerHTML = `
-    <div class="progress-card wizard-loading">
-      <img class="wizard-art" src="/assets/wizard-sax.webp" alt="" width="220" height="256"
-           onerror="this.onerror=null;this.src='/assets/wizard-sax.png'">
+    <div class="progress-card loading-card">
+      <img class="loading-hero" src="/assets/wizard-sax.webp?v=2" alt="" width="220" height="256"
+           onerror="this.onerror=null;this.src='/assets/wizard-sax.png?v=2'">
       <h2 style="margin:0">${esc(job.title)}</h2>
       <p class="facts" style="margin:6px 0 0">${statusLine}</p>
-      <div class="wizard-track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
-        <i class="fill" style="width:${pct}%"></i>
+      <div class="progress-row">
+        <div class="progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+          <span class="progress-fill" style="width:${pct}%"></span>
+        </div>
+        <span class="progress-pct">${pct}%</span>
       </div>
-      <p class="wizard-pct">${pct}%</p>
       <ul class="stages">
         ${STAGES.map(([id, label], i) => `<li class="${i < idx ? "done" : i === idx ? (failed ? "failed" : "active") : ""}">${label}</li>`).join("")}
       </ul>

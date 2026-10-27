@@ -53,12 +53,12 @@
       50% { transform: translateY(-6px); }
     }
     .track {
-      height: 10px; margin: 18px 8px 8px;
-      background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;
+      height: 8px; margin: 18px 8px 8px;
+      background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;
     }
     .track .fill {
-      display: block; height: 100%; width: 35%; border-radius: inherit;
-      background: linear-gradient(90deg, #c98a17, var(--accent));
+      display: block; height: 100%; width: 35%; border-radius: 0;
+      background: var(--accent);
       animation: pulse-fill 1.6s ease-in-out infinite;
     }
     @keyframes pulse-fill {
