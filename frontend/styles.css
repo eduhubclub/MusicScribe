@@ -491,6 +491,11 @@ body.on-library-page .sidebar-list,
 body.on-library-page .sidebar-meta {
   display: none !important;
 }
+/* Song page: keep title + meta; hide LIBRARY label and song list */
+body.on-song-page .sidebar-lib,
+body.on-song-page .sidebar-list {
+  display: none !important;
+}
 .sidebar-list {
   flex: 1 1 auto; overflow: auto; padding: 8px 8px 12px;
   display: flex; flex-direction: column; gap: 4px;
