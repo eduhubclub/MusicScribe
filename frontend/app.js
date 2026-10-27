@@ -804,22 +804,49 @@ function showSong(job) {
     drawRoll();
   }
 
+  function paperHtml(body, { hint = "" } = {}) {
+    const hintHtml = hint ? `<p class="hint no-print">${hint}</p>` : "";
+    return `${hintHtml}<div class="sheet-page"><h2 class="sheet-title" id="sheetTitle" contenteditable="true" spellcheck="false" title="Edit title">${esc(job.title)}</h2><div class="sheet-body">${body}</div></div>`;
+  }
+
+  function bindSheetTitle() {
+    const sheetTitle = view.querySelector("#sheetTitle");
+    if (!sheetTitle) return;
+    sheetTitle.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); sheetTitle.blur(); }
+      if (e.key === "Escape") { sheetTitle.textContent = job.title; sheetTitle.blur(); }
+    });
+    sheetTitle.addEventListener("blur", () => {
+      const t = sheetTitle.textContent.replace(/\s+/g, " ").trim();
+      if (!t) { sheetTitle.textContent = job.title; return; }
+      if (t === job.title) return;
+      job.title = t;
+      const chromeTitle = app.querySelector("#title");
+      if (chromeTitle) chromeTitle.textContent = t;
+      api.rename(id, t).catch(() => {});
+    });
+  }
+
   function renderSheet() {
     const bl = blocks();
-    if (!bl.length) { view.innerHTML = `<p class="empty">No chords or lyrics were detected.</p>`; return; }
+    if (!bl.length) {
+      view.innerHTML = paperHtml(`<p class="empty">No chords or lyrics were detected.</p>`);
+      bindSheetTitle();
+      return;
+    }
     const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
-    let html = `<p class="hint no-print">Edit on the page: click a chord to rewrite it · double-click a lyric · drag edge handles (or Alt+←/→) for timing · click a word to jump${missing}</p><div class="sheet-page"><h2 class="sheet-title" id="sheetTitle" contenteditable="true" spellcheck="false" title="Edit title">${esc(job.title)}</h2><div class="sheet">`;
+    let body = `<div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
-        html += `<div class="instrumental">${b.measures.map(m =>
+        body += `<div class="instrumental">${b.measures.map(m =>
           `<span class="m" data-mi="${m.i}">${m.chords.map(c => `<b>${esc(show(c))}</b>`).join(" ")}</span>`).join("")}</div>`;
       } else {
         const gap = b.li > 0 && (b.gapBefore > 3 || b.line.stanza) ? ' style="margin-top:22px"' : "";
         if (b.line.section) {
           const sec = (r.confidence?.by_section || []).find(s => s.label === b.line.section);
-          html += `<div class="section-label">${esc(b.line.section)}${sec ? confBadge("trust", sec.score, (sec.reasons || []).join("; ")) : ""}</div>`;
+          body += `<div class="section-label">${esc(b.line.section)}${sec ? confBadge("trust", sec.score, (sec.reasons || []).join("; ")) : ""}</div>`;
         }
-        html += `<div class="line" data-li="${b.li}"${b.line.section ? "" : gap}>` + lineChunks(b.line).map(c => {
+        body += `<div class="line" data-li="${b.li}"${b.line.section ? "" : gap}>` + lineChunks(b.line).map(c => {
           const label = c.chords.map(x => esc(show(x.name))).join(" ");
           const carry = c.chords.length && c.chords.every(x => x.carry) ? " carry" : "";
           const si = c.chords.length ? c.chords[0].si : "";
@@ -827,30 +854,17 @@ function showSong(job) {
         }).join("") + `</div>`;
       }
     }
-    view.innerHTML = html + "</div></div>";
+    body += `</div>`;
+    view.innerHTML = paperHtml(body, {
+      hint: `Edit on the page: click a chord to rewrite it · double-click a lyric · drag edge handles (or Alt+←/→) for timing · click a word to jump${missing}`,
+    });
+    bindSheetTitle();
     view.querySelector("#pasteLink")?.addEventListener("click", e => {
       e.preventDefault();
       st.view = "lyrics";
       tabBtns.forEach(b => b.classList.toggle("on", b.dataset.view === "lyrics"));
       editLyrics(lyricsText());
     });
-
-    const sheetTitle = view.querySelector("#sheetTitle");
-    if (sheetTitle) {
-      sheetTitle.addEventListener("keydown", e => {
-        if (e.key === "Enter") { e.preventDefault(); sheetTitle.blur(); }
-        if (e.key === "Escape") { sheetTitle.textContent = job.title; sheetTitle.blur(); }
-      });
-      sheetTitle.addEventListener("blur", () => {
-        const t = sheetTitle.textContent.replace(/\s+/g, " ").trim();
-        if (!t) { sheetTitle.textContent = job.title; return; }
-        if (t === job.title) return;
-        job.title = t;
-        const chromeTitle = app.querySelector("#title");
-        if (chromeTitle) chromeTitle.textContent = t;
-        api.rename(id, t).catch(() => {});
-      });
-    }
 
     view.querySelectorAll(".line").forEach(lineEl => {
       const ln = r.lyrics.lines[+lineEl.dataset.li];
@@ -1075,21 +1089,26 @@ function showSong(job) {
   function renderTab(part) {
     const tab = r.parts[part];
     if (!tab || !tab.measures || !tab.measures.length || !tab.note_count) {
-      view.innerHTML = `<p class="empty">No playable notes were found for this part.</p>`;
+      view.innerHTML = paperHtml(`<p class="empty">No playable notes were found for this part.</p>`);
+      bindSheetTitle();
       return;
     }
+    view.innerHTML = paperHtml(`<div class="tabwrap" id="tabBody"></div><div id="tabEdit" class="tab-edit no-print"></div>`, {
+      hint: tabHint(part, tab),
+    });
+    bindSheetTitle();
+    const body = view.querySelector("#tabBody");
     const probe = document.createElement("span");
     probe.className = "tabrow";
     probe.style.cssText = "position:absolute;visibility:hidden";
     probe.textContent = "0".repeat(50);
-    view.innerHTML = "";
-    view.appendChild(probe);
+    body.appendChild(probe);
     const charW = probe.getBoundingClientRect().width / 50 || 8.4;
     probe.remove();
-    const maxChars = Math.max(40, Math.floor(view.clientWidth / charW) - 1);
+    const maxChars = Math.max(40, Math.floor(body.clientWidth / charW) - 1);
 
     const pad = " ".repeat(tab.string_names[0].length + 1);
-    let html = `<p class="hint no-print">${tabHint(part, tab)}</p><div class="tabwrap">`;
+    let html = "";
     for (const row of tabRows(tab, maxChars)) {
       html += `<pre class="tabrow"><span class="chordline">${pad}${row.map(m => `<span data-tm="${m.i}">${esc(m.chords)}</span>`).join("")}</span>\n`;
       for (let s = 0; s < tab.string_names.length; s++) {
@@ -1097,8 +1116,7 @@ function showSong(job) {
       }
       html += "</pre>";
     }
-    html += `</div><div id="tabEdit" class="tab-edit no-print"></div>`;
-    view.innerHTML = html;
+    body.innerHTML = html;
     const byMeasure = {};
     view.querySelectorAll("[data-tm]").forEach(el => (byMeasure[el.dataset.tm] ||= []).push(el));
     tab.measures.forEach((m, i) => {
@@ -1232,7 +1250,11 @@ function showSong(job) {
   function renderChords() {
     const seen = [];
     for (const s of r.chords) if (s.chord !== "N" && !seen.includes(diagramName(s.chord))) seen.push(diagramName(s.chord));
-    if (!seen.length) { view.innerHTML = `<p class="empty">No chords detected.</p>`; return; }
+    if (!seen.length) {
+      view.innerHTML = paperHtml(`<p class="empty">No chords detected.</p>`);
+      bindSheetTitle();
+      return;
+    }
     const draw = {
       guitar: c => Chords.diagramSVG(c, shapeStrings()),
       ukulele: c => Chords.diagramSVG(c, UKULELE, false),
@@ -1241,12 +1263,13 @@ function showSong(job) {
     const note = st.instr === "guitar" && !isUniformShift(r.tuning.strings)
       ? `Diagrams are worked out for ${esc(r.tuning.name)}.`
       : st.instr === "guitar" ? "" : "Shown at concert pitch (not affected by guitar tuning or capo).";
-    view.innerHTML = `
+    view.innerHTML = paperHtml(`
       <div class="instr-pick">${[["guitar", "Guitar"], ["ukulele", "Ukulele"], ["piano", "Piano"]].map(([k, label]) =>
         `<button data-instr="${k}" class="${st.instr === k ? "on" : ""}">${label}</button>`).join("")}
         <span class="hint" style="margin:0">${note}</span></div>
       <div class="diagrams ${st.instr}">${seen.map(c => `<div class="diagram" data-chord="${esc(c)}"><div class="name">${esc(c)}</div>${draw(c)}</div>`).join("")}</div>
-      <div class="timeline">${r.chords.map((s, i) => `<div data-i="${i}" title="${esc(diagramName(s.chord))} @ ${fmtTime(s.start)}" style="flex:${(s.end - s.start).toFixed(2)};background:${chordColor(s.chord)}">${esc(diagramName(s.chord))}</div>`).join("")}</div>`;
+      <div class="timeline">${r.chords.map((s, i) => `<div data-i="${i}" title="${esc(diagramName(s.chord))} @ ${fmtTime(s.start)}" style="flex:${(s.end - s.start).toFixed(2)};background:${chordColor(s.chord)}">${esc(diagramName(s.chord))}</div>`).join("")}</div>`);
+    bindSheetTitle();
     view.querySelectorAll(".timeline div").forEach(el => (el.onclick = () => { audio.currentTime = r.chords[+el.dataset.i].start; }));
     view.querySelectorAll("[data-instr]").forEach(b => (b.onclick = () => {
       st.instr = b.dataset.instr;
@@ -1264,7 +1287,11 @@ function showSong(job) {
 
   function renderRoll(part) {
     const notes = (r.parts[part] && r.parts[part].notes) || [];
-    if (!notes.length) { view.innerHTML = `<p class="empty">No notes were found for this part.</p>`; return; }
+    if (!notes.length) {
+      view.innerHTML = paperHtml(`<p class="empty">No notes were found for this part.</p>`);
+      bindSheetTitle();
+      return;
+    }
     const pitches = notes.map(n => n[2] + st.semis);
     let lo = Math.min(...pitches) - 2, hi = Math.max(...pitches) + 2;
     if (hi - lo < 24) { const mid = (hi + lo) >> 1; lo = mid - 12; hi = mid + 12; }
@@ -1273,8 +1300,10 @@ function showSong(job) {
     const what = part === "piano"
       ? "Notes from the piano/keys stem"
       : "The sung melody, one note at a time, ready to play on any instrument";
-    view.innerHTML = `<p class="hint">${what} · ${notes.length} notes · ${st.semis ? "transposed" : "concert pitch"} · click to jump · <a href="/api/jobs/${id}/midi/${part}" download>MIDI</a></p>
-      <div class="roll"><canvas></canvas></div>`;
+    view.innerHTML = paperHtml(`<div class="roll"><canvas></canvas></div>`, {
+      hint: `${what} · ${notes.length} notes · ${st.semis ? "transposed" : "concert pitch"} · click to jump · <a href="/api/jobs/${id}/midi/${part}" download>MIDI</a>`,
+    });
+    bindSheetTitle();
     const canvas = view.querySelector("canvas");
     const height = ROLL_TOP + (hi - lo + 1) * rowH + lyricsStrip;
     canvas.style.height = `${height}px`;
@@ -1457,17 +1486,20 @@ function showSong(job) {
   function renderLyrics() {
     const text = lyricsText();
     const pasted = !!r.lyrics.reference;
-    view.innerHTML = `
-      <p class="hint">${pasted ? "Your lyrics, timed to the song" : `Automatic transcription (${esc(r.lyrics.language || "unknown")})`}
+    const tools = `<p class="hint">${pasted ? "Your lyrics, timed to the song" : `Automatic transcription (${esc(r.lyrics.language || "unknown")})`}
         <button id="editLyrics" style="margin-left:8px">${pasted ? "Edit lyrics" : "Paste full lyrics"}</button>
-        ${text ? `<button id="copy">Copy</button>` : ""}</p>
-      ${text ? `<div class="lyrics-plain">${esc(text)}</div>` : `<p class="empty">No vocals were transcribed. Paste the lyrics to add them.</p>`}`;
+        ${text ? `<button id="copy">Copy</button>` : ""}</p>`;
+    const body = text
+      ? `${tools}<div class="lyrics-plain">${esc(text)}</div>`
+      : `${tools}<p class="empty">No vocals were transcribed. Paste the lyrics to add them.</p>`;
+    view.innerHTML = paperHtml(body);
+    bindSheetTitle();
     view.querySelector("#copy")?.addEventListener("click", e => navigator.clipboard.writeText(text).then(() => (e.target.textContent = "Copied")));
     view.querySelector("#editLyrics").onclick = () => editLyrics(pasted ? r.lyrics.text : text);
   }
 
   function editLyrics(initial) {
-    view.innerHTML = `
+    view.innerHTML = paperHtml(`
       <p class="hint">Paste or type the full lyrics, one sung line per line, with a blank line between verses and choruses.
         Words the transcription heard keep their timing, and the rest are placed where the vocal track has singing.</p>
       <textarea id="lyricsBox" class="lyrics-box" spellcheck="false">${esc(initial || "")}</textarea>
@@ -1476,7 +1508,8 @@ function showSong(job) {
         <button id="cancel">Cancel</button>
         ${r.lyrics.reference ? `<button id="revert">Go back to the automatic transcription</button>` : ""}
         <span id="lyricsStatus" class="hint" style="margin:0"></span>
-      </div>`;
+      </div>`);
+    bindSheetTitle();
     const box = view.querySelector("#lyricsBox");
     box.focus();
     const submit = async text => {

@@ -351,8 +351,9 @@ button.conf-badge.conf-overall:hover { filter: brightness(1.15); }
 .suggest span { flex: 1 1 320px; }
 .tabs {
   display: flex; flex-wrap: wrap; gap: 2px;
-  margin: 0 0 18px; padding: 6px 8px 0;
-  border: 1px solid var(--chrome-line); border-bottom: 1px solid var(--chrome-line);
+  margin: 0; padding: 6px 8px 0;
+  border: 1px solid var(--chrome-line);
+  border-bottom: none;
   border-radius: 10px 10px 0 0;
   background: var(--chrome-tabs);
 }
@@ -366,7 +367,7 @@ button.conf-badge.conf-overall:hover { filter: brightness(1.15); }
   background: #fff; border-bottom-color: var(--accent);
 }
 
-/* Chord sheet — paper page on the dark desk */
+/* Paper page — shared by every song tab; width matches the tab strip */
 .sheet-page {
   --paper: #f3f1ea;
   --paper-ink: #1c1a16;
@@ -374,21 +375,64 @@ button.conf-badge.conf-overall:hover { filter: brightness(1.15); }
   --paper-chord: #9a4e12;
   --paper-edge: #cfc8b8;
   --paper-rule: #ddd6c8;
-  max-width: 720px;
-  margin: 0 auto 18px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0 0 18px;
   padding: clamp(22px, 4vw, 40px) clamp(18px, 4vw, 44px) clamp(28px, 5vw, 48px);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 28%),
     var(--paper);
   color: var(--paper-ink);
   border: 1px solid var(--paper-edge);
-  border-radius: 2px;
+  border-radius: 0 0 2px 2px;
   outline: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.55) inset,
     0 0 0 1px rgba(0, 0, 0, 0.25),
     0 18px 40px rgba(0, 0, 0, 0.55),
     0 4px 10px rgba(0, 0, 0, 0.4);
+}
+#view > .hint { margin: 10px 0 8px; }
+.sheet-page .sheet-body { min-width: 0; }
+.sheet-page .empty { color: var(--paper-muted); }
+.sheet-page .hint { color: var(--paper-muted); }
+.sheet-page .hint a { color: var(--paper-chord); }
+.sheet-page .tabrow { color: var(--paper-ink); }
+.sheet-page .tabrow .chordline { color: var(--paper-chord); }
+.sheet-page .tabrow span.on { background: #2a7ca0; color: #fff; }
+.sheet-page .tab-edit {
+  background: rgba(255, 255, 255, 0.7); border-color: var(--paper-rule); color: var(--paper-ink);
+}
+.sheet-page .tab-edit-head { color: var(--paper-muted); }
+.sheet-page .note-table th,
+.sheet-page .note-table td { border-bottom-color: var(--paper-rule); color: var(--paper-ink); }
+.sheet-page .drum-lab { color: var(--paper-muted); }
+.sheet-page .drum-cell { background: #e8e2d6; border-color: var(--paper-rule); color: var(--paper-ink); }
+.sheet-page .instr-pick button {
+  background: #fff; color: var(--paper-ink); border-color: var(--paper-rule);
+}
+.sheet-page .instr-pick button.on {
+  border-color: var(--paper-chord); color: var(--paper-chord); background: #fff8e8;
+}
+.sheet-page .instr-pick .hint { color: var(--paper-muted); }
+.sheet-page .diagram {
+  background: rgba(255, 255, 255, 0.65); border-color: var(--paper-rule);
+}
+.sheet-page .diagram.on { border-color: var(--paper-chord); }
+.sheet-page .diagram .name { color: var(--paper-chord); }
+.sheet-page .timeline { border-color: var(--paper-rule); }
+.sheet-page .lyrics-plain { color: var(--paper-ink); }
+.sheet-page .lyrics-box {
+  background: #fff; color: var(--paper-ink); border-color: var(--paper-rule);
+}
+.sheet-page .lyrics-box:focus { border-color: var(--paper-chord); }
+.sheet-page .roll { border-color: var(--paper-rule); background: #1a1d24; }
+.sheet-page .controls button {
+  background: #fff; color: var(--paper-ink); border-color: var(--paper-rule);
+}
+.sheet-page .controls button.primary {
+  background: var(--accent); color: #1a1407; border-color: var(--accent);
 }
 .sheet-page .sheet-title {
   margin: 0 0 18px; padding: 0 0 12px;
@@ -571,7 +615,7 @@ button.on { border-color: var(--accent); color: var(--accent); }
   .playbar .now { min-width: 0; }
   .sheet { font-size: 14px; }
   .sheet-page {
-    margin-left: 0; margin-right: 0;
+    width: 100%; margin-left: 0; margin-right: 0;
     padding: 20px 16px 28px;
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
   }
