@@ -197,7 +197,7 @@ function showLibrary() {
   };
 
   async function upload(file) {
-    status.textContent = `Uploading ${file.name}…`;
+    status.innerHTML = `<span class="upload-busy"><img src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
     try {
       const meta = await api.upload(file, currentOpts());
       location.hash = `#/job/${meta.id}`;
@@ -302,11 +302,25 @@ async function showJob(id) {
 function showProgress(job) {
   const idx = STAGES.findIndex(([id]) => id === job.stage);
   const failed = job.status === "error";
+  const pct = Math.max(0, Math.min(100, Math.round((job.progress || 0) * 100)));
+  const statusLine = failed
+    ? "Processing failed"
+    : job.status === "queued" && idx < 0
+      ? "Waiting in queue…"
+      : esc(job.stage_label || "Working…");
   app.innerHTML = `
-    <div class="progress-card">
+    <div class="progress-card wizard-loading">
+      <img class="wizard-art" src="/assets/wizard-sax.webp" alt="" width="220" height="256"
+           onerror="this.onerror=null;this.src='/assets/wizard-sax.png'">
       <h2 style="margin:0">${esc(job.title)}</h2>
-      <p class="facts" style="margin:6px 0 0">${failed ? "Processing failed" : job.status === "queued" && idx < 0 ? "Waiting in queue…" : esc(job.stage_label || "")}</p>
-      <div class="bar bigbar"><i style="width:${Math.round((job.progress || 0) * 100)}%"></i></div>
+      <p class="facts" style="margin:6px 0 0">${statusLine}</p>
+      <div class="wizard-track" aria-hidden="true">
+        <i class="fill" style="width:${pct}%"></i>
+        <span class="wizard-marker" style="left:${pct}%">
+          <img src="/assets/wizard-sax.png" alt="">
+        </span>
+      </div>
+      <p class="wizard-pct">${pct}%</p>
       <ul class="stages">
         ${STAGES.map(([id, label], i) => `<li class="${i < idx ? "done" : i === idx ? (failed ? "failed" : "active") : ""}">${label}</li>`).join("")}
       </ul>
@@ -678,7 +692,7 @@ function showSong(job) {
     const bl = blocks();
     if (!bl.length) { view.innerHTML = `<p class="empty">No chords or lyrics were detected.</p>`; return; }
     const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
-    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet">`;
+    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet-page"><div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
         html += `<div class="instrumental">${b.measures.map(m =>
@@ -697,7 +711,7 @@ function showSong(job) {
         }).join("") + `</div>`;
       }
     }
-    view.innerHTML = html + "</div>";
+    view.innerHTML = html + "</div></div>";
     view.querySelector("#pasteLink")?.addEventListener("click", e => {
       e.preventDefault();
       st.view = "lyrics";

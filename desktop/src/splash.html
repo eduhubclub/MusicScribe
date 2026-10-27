@@ -43,14 +43,38 @@
     }
     .brand span { color: var(--accent); }
     p { color: var(--muted); margin: 0 0 20px; line-height: 1.5; }
-    .spinner {
-      width: 42px; height: 42px; margin: 0 auto 18px;
-      border: 3px solid rgba(255,255,255,0.15);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.9s linear infinite;
+    .wizard {
+      width: min(180px, 46vw); height: auto; margin: 0 auto 16px; display: block;
+      filter: drop-shadow(0 12px 24px rgba(0,0,0,0.45));
+      animation: float 2.4s ease-in-out infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .track {
+      position: relative; height: 10px; margin: 18px 8px 8px;
+      background: rgba(255,255,255,0.08); border-radius: 999px; overflow: visible;
+    }
+    .track .fill {
+      display: block; height: 100%; width: 35%; border-radius: inherit;
+      background: linear-gradient(90deg, #c98a17, var(--accent));
+      animation: pulse-fill 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse-fill {
+      0%, 100% { width: 28%; }
+      50% { width: 72%; }
+    }
+    .track .marker {
+      position: absolute; top: 50%; left: 35%; width: 40px; height: 40px;
+      transform: translate(-50%, -50%);
+      animation: pulse-mark 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse-mark {
+      0%, 100% { left: 28%; }
+      50% { left: 72%; }
+    }
+    .track .marker img { width: 100%; height: 100%; object-fit: contain; }
     #status { font-size: 0.95rem; min-height: 1.4em; }
     #status.error { color: var(--danger); }
     pre {
@@ -87,7 +111,8 @@
     <div class="card">
       <h1 class="brand">Music <span>Scribe</span></h1>
       <p>Starting the local engine on this computer. Audio never leaves your machine.</p>
-      <div class="spinner" id="spinner"></div>
+      <img class="wizard" id="wizard" src="assets/wizard-sax.png" alt="">
+      <div class="track" id="track" aria-hidden="true"><i class="fill"></i><span class="marker"><img src="assets/wizard-sax.png" alt=""></span></div>
       <div id="status">Starting engine…</div>
       <button id="retry">Try again</button>
       <pre id="log"></pre>
@@ -97,10 +122,10 @@
     const status = document.getElementById("status");
     const logEl = document.getElementById("log");
     const retry = document.getElementById("retry");
-    const spinner = document.getElementById("spinner");
+    const track = document.getElementById("track");
 
     function showError(message) {
-      spinner.style.display = "none";
+      track.style.display = "none";
       status.classList.add("error");
       status.textContent = message;
       retry.classList.add("visible");
@@ -132,7 +157,7 @@
       retry.classList.remove("visible");
       status.classList.remove("error");
       status.textContent = "Restarting engine…";
-      spinner.style.display = "block";
+      track.style.display = "block";
       logEl.textContent = "";
       try {
         await window.musicScribeDesktop.retryHelper();
