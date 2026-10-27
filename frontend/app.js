@@ -176,6 +176,7 @@ function route() {
   const m = location.hash.match(/^#\/job\/(\w+)/);
   if (m) showJob(m[1]);
   else if (/^#\/tab-your-own\/?$/.test(location.hash)) showTabYourOwn();
+  else if (/^#\/library\/?$/.test(location.hash)) showLibraryGrid();
   else showLibrary();
   refreshSidebar();
   syncSidebarChrome();
@@ -239,10 +240,14 @@ function setSidebarSide(side) {
 }
 
 function syncSidebarChrome() {
+  const library = document.getElementById("headerLibrary");
   const upload = document.getElementById("headerUpload");
   const tabOwn = document.getElementById("headerTabOwn");
-  const onHome = !currentJobId() && !/^#\/tab-your-own/.test(location.hash);
+  const onLibrary = /^#\/library\/?$/.test(location.hash);
   const onTabOwn = /^#\/tab-your-own/.test(location.hash);
+  const onHome = !currentJobId() && !onLibrary && !onTabOwn
+    && (location.hash === "#/" || location.hash === "" || location.hash === "#");
+  if (library) library.classList.toggle("on", onLibrary);
   if (upload) upload.classList.toggle("on", onHome);
   if (tabOwn) tabOwn.classList.toggle("on", onTabOwn);
   // Close the drawer after navigating on narrow screens
@@ -391,6 +396,52 @@ function showTabYourOwn() {
       create.disabled = false;
     }
   };
+}
+
+/* ---------------- Library grid (all songs) ---------------- */
+
+async function showLibraryGrid() {
+  app.innerHTML = `
+    <section class="library-page">
+      <header class="library-page-head">
+        <h1>Library</h1>
+        <p class="lede">All songs on this device.</p>
+      </header>
+      <div class="library-grid" id="libraryGrid">
+        <p class="empty">Loading…</p>
+      </div>
+    </section>`;
+  await refreshLibraryGrid();
+}
+
+async function refreshLibraryGrid() {
+  const el = document.getElementById("libraryGrid");
+  refreshSidebar();
+  if (!el) return;
+  let jobs;
+  try { jobs = await api.list(); } catch {
+    el.innerHTML = `<p class="empty">Couldn't load library.</p>`;
+    return;
+  }
+  if (!jobs.length) {
+    el.innerHTML = `<p class="empty">No songs yet — <a href="#/">upload one</a> or <a href="#/tab-your-own">tab your own</a>.</p>`;
+    return;
+  }
+  el.innerHTML = jobs.map(j => {
+    const busy = j.status === "running" || j.status === "queued";
+    const meta = busy
+      ? (j.stage_label || j.status)
+      : new Date(j.created * 1000).toLocaleDateString();
+    return `<a class="library-card" href="#/job/${j.id}" title="${esc(j.title)}">
+      <span class="library-card-title">${esc(j.title)}</span>
+      <span class="badge ${j.status}">${j.status === "done" ? "ready" : j.status}</span>
+      ${busy ? `<span class="bar"><i style="width:${Math.round((j.progress || 0) * 100)}%"></i></span>` : ""}
+      <span class="library-card-meta">${esc(meta)}</span>
+    </a>`;
+  }).join("");
+  if (jobs.some(j => j.status === "running" || j.status === "queued")) {
+    timers.push(setTimeout(refreshLibraryGrid, 2000));
+  }
 }
 
 /* ---------------- Home (upload-first) ---------------- */
