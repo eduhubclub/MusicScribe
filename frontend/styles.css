@@ -181,6 +181,37 @@ select, input[type=text] {
   /* Crisp black mark on white chrome (EduHub rail) */
   filter: brightness(0);
 }
+/* Sidebar brand: title then wizard; wizard anchored at rail center so it stays put on collapse */
+.sidebar-brand .brand {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sidebar-brand .brand-wizard {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  transition: filter 0.25s ease;
+}
+.sidebar-brand .brand-text {
+  position: absolute;
+  right: calc(50% + 17px + 8px); /* left of centered wizard */
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: min(140px, calc(50% - 36px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
 .tagline { display: none; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 @media (min-width: 1024px) {
@@ -207,6 +238,7 @@ body.has-playbar main { padding-bottom: 96px; }
   border-bottom: var(--edu-border);
   flex: 0 0 auto;
   position: relative;
+  overflow: hidden;
 }
 .sidebar-brand .brand { font-size: 1rem; min-width: 0; }
 .sidebar-foot-btn,
@@ -247,19 +279,19 @@ html[data-theme="dark"] #sidebarTheme {
   }
   body.sidebar-collapsed .sidebar-brand {
     justify-content: center;
-    padding: 10px 4px;
+    padding: 0 4px;
   }
   body.sidebar-collapsed .sidebar-brand .brand {
     width: 100%;
   }
-  body.sidebar-collapsed .brand-text {
-    display: none;
+  /* Title fades/slides away; wizard stays centered in the rail */
+  body.sidebar-collapsed .sidebar-brand .brand-text {
+    opacity: 0;
+    transform: translate(-10px, -50%);
+    pointer-events: none;
   }
-  body.sidebar-collapsed .brand-wizard {
+  body.sidebar-collapsed .sidebar-brand .brand-wizard {
     display: block;
-    width: 34px;
-    height: 40px;
-    margin: 0 auto;
     filter: brightness(0);
   }
   body.sidebar-collapsed .sidebar-label,
