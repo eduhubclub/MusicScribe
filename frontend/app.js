@@ -87,13 +87,91 @@ const TAB_VIEWS = ["guitar", "bass", "drums"];
 const ROLL_VIEWS = ["piano", "melody"];
 const STEM_LABELS = { mix: "Full mix", vocals: "Vocals only", guitar: "Guitar", bass: "Bass", piano: "Piano / keys", drums: "Drums", other: "Other" };
 const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-const GUITAR_STRINGS = [
-  { name: "E2", hz: 82.41 },
-  { name: "A2", hz: 110.00 },
-  { name: "D3", hz: 146.83 },
-  { name: "G3", hz: 196.00 },
-  { name: "B3", hz: 246.94 },
-  { name: "E4", hz: 329.63 },
+const midiToHz = m => 440 * Math.pow(2, (m - 69) / 12);
+const noteHz = (name, octave) => {
+  const i = NOTE_NAMES.indexOf(name);
+  return midiToHz((octave + 1) * 12 + i);
+};
+const TUNER_INSTRUMENTS = [
+  {
+    id: "guitar",
+    label: "Guitar",
+    minHz: 70,
+    strings: [
+      { name: "E2", hz: noteHz("E", 2) },
+      { name: "A2", hz: noteHz("A", 2) },
+      { name: "D3", hz: noteHz("D", 3) },
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "B3", hz: noteHz("B", 3) },
+      { name: "E4", hz: noteHz("E", 4) },
+    ],
+  },
+  {
+    id: "bass",
+    label: "Bass",
+    minHz: 35,
+    strings: [
+      { name: "E1", hz: noteHz("E", 1) },
+      { name: "A1", hz: noteHz("A", 1) },
+      { name: "D2", hz: noteHz("D", 2) },
+      { name: "G2", hz: noteHz("G", 2) },
+    ],
+  },
+  {
+    id: "ukulele",
+    label: "Ukulele",
+    minHz: 170,
+    strings: [
+      { name: "G4", hz: noteHz("G", 4) },
+      { name: "C4", hz: noteHz("C", 4) },
+      { name: "E4", hz: noteHz("E", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+    ],
+  },
+  {
+    id: "mandolin",
+    label: "Mandolin",
+    minHz: 170,
+    strings: [
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "D4", hz: noteHz("D", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+      { name: "E5", hz: noteHz("E", 5) },
+    ],
+  },
+  {
+    id: "violin",
+    label: "Violin",
+    minHz: 170,
+    strings: [
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "D4", hz: noteHz("D", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+      { name: "E5", hz: noteHz("E", 5) },
+    ],
+  },
+  {
+    id: "viola",
+    label: "Viola",
+    minHz: 110,
+    strings: [
+      { name: "C3", hz: noteHz("C", 3) },
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "D4", hz: noteHz("D", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+    ],
+  },
+  {
+    id: "cello",
+    label: "Cello",
+    minHz: 55,
+    strings: [
+      { name: "C2", hz: noteHz("C", 2) },
+      { name: "G2", hz: noteHz("G", 2) },
+      { name: "D3", hz: noteHz("D", 3) },
+      { name: "A3", hz: noteHz("A", 3) },
+    ],
+  },
 ];
 function freqToNote(hz) {
   const midi = 69 + 12 * Math.log2(hz / 440);
@@ -103,15 +181,16 @@ function freqToNote(hz) {
   const octave = Math.floor(nearest / 12) - 1;
   return { name, octave, cents, midi: nearest, label: `${name}${octave}` };
 }
-function detectPitchHz(buf, sampleRate) {
-  // Autocorrelation pitch detect — solid for single guitar notes.
+function detectPitchHz(buf, sampleRate, minHz = 70) {
+  // Autocorrelation pitch detect — works for single open-string notes.
   let rms = 0;
   for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / buf.length);
   if (rms < 0.01) return null;
 
-  const minLag = Math.floor(sampleRate / 1000);   // ~1000 Hz ceiling
-  const maxLag = Math.floor(sampleRate / 70);     // ~70 Hz floor (low E)
+  const floor = Math.max(30, minHz * 0.85);
+  const minLag = Math.floor(sampleRate / 1200);  // ~1200 Hz ceiling
+  const maxLag = Math.floor(sampleRate / floor);
   let bestLag = -1;
   let bestCorr = 0;
   for (let lag = minLag; lag <= maxLag; lag++) {
@@ -459,22 +538,32 @@ function showCreate() {
         <a class="create-tile" href="#/tuner" role="listitem" title="Tune your guitar with the microphone">
           <span class="create-tile-mark" aria-hidden="true">♮</span>
           <span class="create-tile-label">Tuner</span>
-          <span class="create-tile-desc">Mic pitch → note and cents</span>
+          <span class="create-tile-desc">Guitar, bass, uke, strings…</span>
         </a>
       </div>
     </section>`;
 }
 
-/* ---------------- Guitar tuner (mic pitch) ---------------- */
+/* ---------------- Instrument tuner (mic pitch) ---------------- */
 
 function showTuner() {
+  const savedId = store.get("tunerInstrument", "guitar");
+  let instrument = TUNER_INSTRUMENTS.find(i => i.id === savedId) || TUNER_INSTRUMENTS[0];
+
   app.innerHTML = `
     <section class="tuner-page">
       <header class="tuner-head">
         <h1>Tuner</h1>
-        <p class="lede">Play a string — pitch is read from your microphone.</p>
+        <p class="lede">Pick an instrument, then play a string — pitch is read from your microphone.</p>
       </header>
       <div class="tuner-panel" id="tunerPanel">
+        <label class="tuner-instrument">Instrument
+          <select id="tunerInstrument" aria-label="Instrument">
+            ${TUNER_INSTRUMENTS.map(i =>
+              `<option value="${i.id}" ${i.id === instrument.id ? "selected" : ""}>${esc(i.label)}</option>`
+            ).join("")}
+          </select>
+        </label>
         <div class="tuner-note" id="tunerNote">—</div>
         <div class="tuner-cents" id="tunerCents">Listen…</div>
         <div class="tuner-meter" aria-hidden="true">
@@ -487,9 +576,7 @@ function showTuner() {
           <div class="tuner-meter-labels"><span>−50¢</span><span>0</span><span>+50¢</span></div>
         </div>
         <div class="tuner-hz" id="tunerHz"></div>
-        <div class="tuner-strings" id="tunerStrings">
-          ${GUITAR_STRINGS.map(s => `<span class="tuner-string" data-name="${s.name}">${s.name}</span>`).join("")}
-        </div>
+        <div class="tuner-strings" id="tunerStrings"></div>
         <canvas class="tuner-wave" id="tunerWave" width="640" height="80" aria-hidden="true"></canvas>
         <p class="tuner-status" id="tunerStatus">Starting microphone…</p>
         <button type="button" class="primary" id="tunerToggle" hidden>Start tuner</button>
@@ -503,9 +590,10 @@ function showTuner() {
   const hzEl = app.querySelector("#tunerHz");
   const statusEl = app.querySelector("#tunerStatus");
   const toggleBtn = app.querySelector("#tunerToggle");
+  const stringsEl = app.querySelector("#tunerStrings");
+  const instrumentSel = app.querySelector("#tunerInstrument");
   const wave = app.querySelector("#tunerWave");
   const waveCtx = wave.getContext("2d");
-  const stringEls = [...app.querySelectorAll(".tuner-string")];
 
   let audioCtx = null;
   let stream = null;
@@ -514,6 +602,12 @@ function showTuner() {
   let raf = 0;
   let running = false;
   let smoothCents = 0;
+
+  function renderStrings() {
+    stringsEl.innerHTML = instrument.strings
+      .map(s => `<span class="tuner-string" data-name="${esc(s.name)}">${esc(s.name)}</span>`)
+      .join("");
+  }
 
   function drawWave(data) {
     const w = wave.width;
@@ -533,14 +627,16 @@ function showTuner() {
   }
 
   function highlightString(label) {
-    stringEls.forEach(el => el.classList.toggle("on", el.dataset.name === label));
+    stringsEl.querySelectorAll(".tuner-string").forEach(el => {
+      el.classList.toggle("on", el.dataset.name === label);
+    });
   }
 
   function tick() {
     if (!running || !analyser) return;
     analyser.getFloatTimeDomainData(buf);
     drawWave(buf);
-    const hz = detectPitchHz(buf, audioCtx.sampleRate);
+    const hz = detectPitchHz(buf, audioCtx.sampleRate, instrument.minHz);
     if (hz) {
       const note = freqToNote(hz);
       smoothCents = smoothCents * 0.7 + note.cents * 0.3;
@@ -554,10 +650,10 @@ function showTuner() {
       needleEl.style.left = `${((clamped + 50) / 100) * 100}%`;
       needleEl.classList.toggle("in-tune", inTune);
       hzEl.textContent = `${hz.toFixed(1)} Hz`;
-      // Closest open string (within ~1 semitone)
+      // Closest open string for the selected instrument (within ~1 semitone)
       let closest = null;
       let best = Infinity;
-      for (const s of GUITAR_STRINGS) {
+      for (const s of instrument.strings) {
         const diff = Math.abs(12 * Math.log2(hz / s.hz));
         if (diff < best) { best = diff; closest = s.name; }
       }
@@ -569,6 +665,22 @@ function showTuner() {
     raf = requestAnimationFrame(tick);
   }
 
+  instrumentSel.onchange = () => {
+    instrument = TUNER_INSTRUMENTS.find(i => i.id === instrumentSel.value) || TUNER_INSTRUMENTS[0];
+    store.set("tunerInstrument", instrument.id);
+    renderStrings();
+    highlightString(null);
+    noteEl.textContent = "—";
+    noteEl.classList.remove("in-tune");
+    centsEl.textContent = "Listen…";
+    centsEl.classList.remove("in-tune");
+    needleEl.style.left = "50%";
+    needleEl.classList.remove("in-tune");
+    hzEl.textContent = "";
+    smoothCents = 0;
+  };
+  renderStrings();
+
   async function start() {
     statusEl.textContent = "Starting microphone…";
     toggleBtn.hidden = true;
@@ -579,7 +691,8 @@ function showTuner() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const src = audioCtx.createMediaStreamSource(stream);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 4096;
+      // Larger buffer helps low bass fundamentals
+      analyser.fftSize = 8192;
       src.connect(analyser);
       buf = new Float32Array(analyser.fftSize);
       running = true;
