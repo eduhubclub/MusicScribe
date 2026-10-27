@@ -209,6 +209,11 @@ body.has-playbar main { padding-bottom: 96px; }
 }
 body.has-sidebar { padding-left: var(--sidebar-w); }
 body.has-sidebar .playbar { left: var(--sidebar-w); }
+/* EduHub: brand lives in the sidebar rail; keep topbar chrome clean on desktop */
+body.has-sidebar .topbar .brand { display: none; }
+@media (max-width: 900px) {
+  body.has-sidebar .topbar .brand { display: inline; }
+}
 
 @media (max-width: 900px) {
   body.has-sidebar { padding-left: 0; }
