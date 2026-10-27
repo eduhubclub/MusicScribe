@@ -57,6 +57,7 @@ button, select, input { font: inherit; color: inherit; }
   display: flex; align-items: center; justify-content: center;
   background: var(--chrome-bg);
   color: var(--chrome-text);
+  cursor: pointer;
   transition: opacity 0.45s ease, visibility 0.45s ease;
 }
 .splash.splash-out {
@@ -64,28 +65,11 @@ button, select, input { font: inherit; color: inherit; }
   visibility: hidden;
   pointer-events: none;
 }
-.splash-continue {
+.splash-inner {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 18px;
-  margin: 0; padding: 28px 24px;
-  border: 0 none transparent;
-  border-radius: 0;
-  background: transparent;
-  background-color: transparent;
-  color: inherit;
-  box-shadow: none;
-  font: inherit;
-  font-weight: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.splash-continue:hover,
-.splash-continue:focus {
-  background: transparent;
-  background-color: transparent;
-  border: 0 none transparent;
-  box-shadow: none;
-  outline: none;
+  padding: 28px 24px;
+  pointer-events: none; /* clicks pass through to splash (anywhere dismiss) */
 }
 .splash-wizard {
   width: min(200px, 46vw);
@@ -103,6 +87,16 @@ button, select, input { font: inherit; color: inherit; }
   letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--chrome-text);
+}
+.splash-cta {
+  pointer-events: auto;
+  margin-top: 6px;
+  min-width: 160px;
+  padding: 12px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
 }
 body.splash-active { overflow: hidden; }
 body.splash-active .sidebar,

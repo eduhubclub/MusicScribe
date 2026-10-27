@@ -9,12 +9,13 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="has-sidebar splash-active">
-  <div id="splash" class="splash no-print" role="dialog" aria-label="MusicScribe" aria-modal="true">
-    <button type="button" class="splash-continue" id="splashContinue" title="Continue">
+  <div id="splash" class="splash no-print" role="dialog" aria-label="MusicScribe" aria-modal="true" title="Click to continue">
+    <div class="splash-inner">
       <img class="splash-wizard" src="/assets/wizard-sax.png" alt="" width="180" height="210"
            onerror="this.onerror=null;this.src='/assets/wizard-sax.webp'">
       <span class="splash-title">MusicScribe</span>
-    </button>
+      <button type="button" class="splash-cta primary" id="splashContinue">Get started</button>
+    </div>
   </div>
   <aside id="sidebar" class="sidebar no-print" aria-label="Library">
     <div class="sidebar-brand">

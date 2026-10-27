@@ -290,15 +290,16 @@ function initSplash() {
     return;
   }
   const go = () => dismissSplash();
-  btn?.addEventListener("click", go);
+  // Click/tap anywhere on the splash (including Get started) continues.
+  el.addEventListener("click", go);
   el.addEventListener("keydown", e => {
     if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
       e.preventDefault();
       go();
     }
   });
-  // Brief hold, then fade into home/library (tap/click also continues).
-  splashTimer = setTimeout(go, 1800);
+  // Brief hold, then fade into home/library.
+  splashTimer = setTimeout(go, 2200);
   btn?.focus({ preventScroll: true });
 }
 
