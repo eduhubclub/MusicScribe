@@ -8,13 +8,16 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import lyrics, midi, pdf_export, pipeline, privacy
+from . import lyrics, midi, models, paths, pdf_export, pipeline, privacy
 from .audio import read_tags
 from .jobs import JobStore
 from .lyrics import WHISPER_MODELS
 
-ROOT = Path(__file__).resolve().parents[2]
-FRONTEND = ROOT / "frontend"
+# Point Demucs / Whisper caches at the Music Scribe user-data folder before any ML import.
+paths.apply_cache_env()
+
+ROOT = paths.resource_root()
+FRONTEND = paths.frontend_dir()
 # Default: ephemeral OS-temp jobs (not a durable shared data/ library). Opt into keep via env.
 JOBS_ROOT = privacy.ephemeral_root(ROOT)
 store = JobStore(JOBS_ROOT)
@@ -26,6 +29,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if not FRONTEND.is_dir():
+        logging.getLogger(__name__).warning("frontend directory missing at %s", FRONTEND)
     if not privacy.keep_jobs():
         removed = privacy.wipe_jobs(JOBS_ROOT)
         logging.getLogger(__name__).info("privacy: wiped %s ephemeral job(s) at start", removed)
@@ -52,6 +57,30 @@ def _get(job_id: str) -> dict:
         return store.get(job_id)
     except KeyError:
         raise HTTPException(404, "job not found")
+
+
+@app.get("/api/health")
+def health():
+    """Liveness for the Electron splash / helper watchdog."""
+    return {"ok": True, "host": "127.0.0.1"}
+
+
+@app.get("/api/models")
+def get_models():
+    """Whether Demucs / Whisper weights are present in the local Music Scribe cache."""
+    return models.status()
+
+
+@app.get("/api/models/download")
+def get_models_download():
+    """Progress snapshot for an in-flight first-run model fetch."""
+    return models.download_status()
+
+
+@app.post("/api/models/download")
+def start_models_download():
+    """Kick off (or resume) first-run downloads into the OS user-data cache."""
+    return models.ensure_models(background=True)
 
 
 @app.get("/api/privacy")
@@ -106,6 +135,26 @@ async def create_job(
         store.rename(meta["id"], title)
     store.enqueue(meta["id"])
     return _get(meta["id"])
+
+
+@app.post("/api/jobs/manual")
+def create_manual_job(payload: dict = Body(...)):
+    """Tab your own: paste lyrics, get a local editable sheet with no audio."""
+    lyrics_text = str(payload.get("lyrics") or "").strip()
+    if not lyrics_text:
+        raise HTTPException(400, "lyrics required")
+    title = str(payload.get("title") or "").strip()
+    if not title:
+        from .manual_sheet import _is_section
+        first = "Untitled"
+        for ln in lyrics_text.splitlines():
+            s = ln.strip()
+            if s and not _is_section(s):
+                first = s
+                break
+        title = first[:80]
+    meta = store.create_manual(title, lyrics_text)
+    return {**meta, "result": store.result(meta["id"])}
 
 
 @app.get("/api/jobs/{job_id}")

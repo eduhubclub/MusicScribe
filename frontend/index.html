@@ -3,17 +3,74 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bandscribe</title>
+  <title>MusicScribe</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <header class="topbar">
-    <a href="#/" class="brand"><span class="brand-mark">♪</span> Bandscribe</a>
-    <span class="tagline">any song → parts for every instrument</span>
-  </header>
-  <main id="app"></main>
+<body class="has-sidebar splash-active">
+  <div id="splash" class="splash no-print" role="dialog" aria-label="MusicScribe" aria-modal="true" title="Click to continue">
+    <div class="splash-inner">
+      <img class="splash-wizard" src="/assets/wizard-painting.webp" alt="" width="200" height="300">
+      <span class="splash-title">MusicScribe</span>
+      <button type="button" class="splash-cta primary" id="splashContinue">Get started</button>
+    </div>
+  </div>
+  <aside id="sidebar" class="sidebar no-print" aria-label="Library">
+    <div class="sidebar-brand">
+      <a href="#/create" class="brand" title="Home">
+        <span class="brand-text">MusicScribe</span>
+        <img class="brand-wizard" src="/assets/wizard-sax.png" alt="" width="40" height="48">
+      </a>
+    </div>
+    <div class="sidebar-meta no-print" id="sidebarMeta" hidden></div>
+    <div class="sidebar-lib">
+      <span class="sidebar-label">Library</span>
+    </div>
+    <div class="sidebar-list" id="sidebarJobs" role="navigation" aria-label="Songs on this device">
+      <p class="sidebar-empty">Loading…</p>
+    </div>
+    <div class="sidebar-foot">
+      <button type="button" class="sidebar-foot-btn no-print" id="sidebarTheme"
+        title="Dark Mode" aria-label="Switch to dark mode">
+        <span class="sidebar-foot-icon" data-ms-icon="moon" aria-hidden="true"></span>
+        <span class="sidebar-foot-label">Dark</span>
+      </button>
+      <button type="button" class="sidebar-foot-btn no-print" id="sidebarFlip"
+        title="Flip Sidebar" aria-label="Flip sidebar to the other side">
+        <span class="sidebar-foot-icon" data-ms-icon="arrow-left-right" aria-hidden="true"></span>
+        <span class="sidebar-foot-label">Flip</span>
+      </button>
+      <button type="button" class="sidebar-foot-btn sidebar-collapse no-print" id="sidebarCollapse"
+        title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">
+        <span class="sidebar-foot-icon" data-ms-icon="panel-left-close" aria-hidden="true"></span>
+        <span class="sidebar-foot-label">Menu</span>
+      </button>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop no-print" id="sidebarBackdrop" hidden></div>
+  <div class="shell">
+    <header class="topbar">
+      <button type="button" class="sidebar-toggle no-print" id="sidebarToggle" aria-label="Open library menu" aria-controls="sidebar" aria-expanded="false">
+        <i data-lucide="menu" class="ms-icon" aria-hidden="true"></i>
+      </button>
+      <a href="#/create" class="brand" title="Home"><span class="brand-text">MusicScribe</span></a>
+      <div class="topbar-actions no-print">
+        <a class="topbar-library" href="#/library" id="headerLibrary" title="Browse all songs">
+          <i data-lucide="library" class="ms-icon" aria-hidden="true"></i>
+          <span>Library</span>
+        </a>
+        <a class="topbar-create" href="#/create" id="headerCreate" title="Upload, record, or tab your own">
+          <i data-lucide="plus" class="ms-icon" aria-hidden="true"></i>
+          <span>Create</span>
+        </a>
+      </div>
+    </header>
+    <main id="app"></main>
+  </div>
+  <footer id="playbar" class="playbar" hidden></footer>
+  <script src="vendor/lucide.min.js"></script>
+  <script src="icons.js"></script>
   <script src="chords.js"></script>
   <script src="local-store.js"></script>
   <script src="inference-stub.js"></script>

@@ -23,13 +23,26 @@ SOFT_MAX_WORDS = 9   # break at punctuation after this many words
 HARD_MAX_WORDS = 14
 
 
+def _whisper_kwargs(device: str, compute: str) -> dict:
+    """Prefer Music Scribe's user-data cache when Electron / first-run set it."""
+    kwargs: dict = {
+        "device": device,
+        "compute_type": compute,
+        "cpu_threads": os.cpu_count() or 4,
+    }
+    download_root = os.environ.get("MUSICSCRIBE_WHISPER_CACHE")
+    if download_root:
+        kwargs["download_root"] = download_root
+    return kwargs
+
+
 def _get_model(size: str):
     if size not in _models:
         from faster_whisper import WhisperModel
 
         device, compute = whisper_device()
         try:
-            model = WhisperModel(size, device=device, compute_type=compute, cpu_threads=os.cpu_count() or 4)
+            model = WhisperModel(size, **_whisper_kwargs(device, compute))
             if device != "cpu":
                 # Missing CUDA libraries only show up when inference starts, so check now.
                 segments, _ = model.transcribe(np.zeros(16000, dtype=np.float32), language="en")
@@ -39,8 +52,7 @@ def _get_model(size: str):
             if device == "cpu":
                 raise
             log.exception("Whisper failed to load on %s, using CPU", device)
-            _models[size] = WhisperModel(size, device="cpu", compute_type="int8",
-                                         cpu_threads=os.cpu_count() or 4)
+            _models[size] = WhisperModel(size, **_whisper_kwargs("cpu", "int8"))
     return _models[size]
 
 

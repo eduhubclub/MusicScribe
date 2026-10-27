@@ -35,6 +35,11 @@ const api = {
     fd.append("language", opts.language);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json);
   },
+  createManual: (title, lyrics) => fetch("/api/jobs/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, lyrics }),
+  }).then(json),
   rename: (id, title) => fetch(`/api/jobs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) }).then(json),
   upgrade: id => fetch(`/api/jobs/${id}/parts`, { method: "POST" }).then(json),
   lows: id => fetch(`/api/jobs/${id}/lows`).then(json),
@@ -81,54 +86,850 @@ const PART_VIEWS = [["guitar", "Guitar tab"], ["bass", "Bass tab"], ["piano", "P
 const TAB_VIEWS = ["guitar", "bass", "drums"];
 const ROLL_VIEWS = ["piano", "melody"];
 const STEM_LABELS = { mix: "Full mix", vocals: "Vocals only", guitar: "Guitar", bass: "Bass", piano: "Piano / keys", drums: "Drums", other: "Other" };
+const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const midiToHz = m => 440 * Math.pow(2, (m - 69) / 12);
+const noteHz = (name, octave) => {
+  const i = NOTE_NAMES.indexOf(name);
+  return midiToHz((octave + 1) * 12 + i);
+};
+// Lucide names for tuner instrument toggles (see frontend/icons.js + vendor/lucide.min.js).
+const TUNER_ICONS = {
+  guitar: "guitar",
+  bass: "audio-lines",
+  ukulele: "music-2",
+  mandolin: "music-3",
+  violin: "music",
+  viola: "music-4",
+  cello: "audio-waveform",
+};
+const TUNER_INSTRUMENTS = [
+  {
+    id: "guitar",
+    label: "Guitar",
+    minHz: 70,
+    strings: [
+      { name: "E2", hz: noteHz("E", 2) },
+      { name: "A2", hz: noteHz("A", 2) },
+      { name: "D3", hz: noteHz("D", 3) },
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "B3", hz: noteHz("B", 3) },
+      { name: "E4", hz: noteHz("E", 4) },
+    ],
+  },
+  {
+    id: "bass",
+    label: "Bass",
+    minHz: 35,
+    strings: [
+      { name: "E1", hz: noteHz("E", 1) },
+      { name: "A1", hz: noteHz("A", 1) },
+      { name: "D2", hz: noteHz("D", 2) },
+      { name: "G2", hz: noteHz("G", 2) },
+    ],
+  },
+  {
+    id: "ukulele",
+    label: "Ukulele",
+    minHz: 170,
+    strings: [
+      { name: "G4", hz: noteHz("G", 4) },
+      { name: "C4", hz: noteHz("C", 4) },
+      { name: "E4", hz: noteHz("E", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+    ],
+  },
+  {
+    id: "mandolin",
+    label: "Mandolin",
+    minHz: 170,
+    strings: [
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "D4", hz: noteHz("D", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+      { name: "E5", hz: noteHz("E", 5) },
+    ],
+  },
+  {
+    id: "violin",
+    label: "Violin",
+    minHz: 170,
+    strings: [
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "D4", hz: noteHz("D", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+      { name: "E5", hz: noteHz("E", 5) },
+    ],
+  },
+  {
+    id: "viola",
+    label: "Viola",
+    minHz: 110,
+    strings: [
+      { name: "C3", hz: noteHz("C", 3) },
+      { name: "G3", hz: noteHz("G", 3) },
+      { name: "D4", hz: noteHz("D", 4) },
+      { name: "A4", hz: noteHz("A", 4) },
+    ],
+  },
+  {
+    id: "cello",
+    label: "Cello",
+    minHz: 55,
+    strings: [
+      { name: "C2", hz: noteHz("C", 2) },
+      { name: "G2", hz: noteHz("G", 2) },
+      { name: "D3", hz: noteHz("D", 3) },
+      { name: "A3", hz: noteHz("A", 3) },
+    ],
+  },
+];
+function freqToNote(hz) {
+  const midi = 69 + 12 * Math.log2(hz / 440);
+  const nearest = Math.round(midi);
+  const cents = Math.round((midi - nearest) * 100);
+  const name = NOTE_NAMES[((nearest % 12) + 12) % 12];
+  const octave = Math.floor(nearest / 12) - 1;
+  return { name, octave, cents, midi: nearest, label: `${name}${octave}` };
+}
+function detectPitchHz(buf, sampleRate, minHz = 70) {
+  // Autocorrelation pitch detect — works for single open-string notes.
+  let rms = 0;
+  for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / buf.length);
+  if (rms < 0.01) return null;
+
+  const floor = Math.max(30, minHz * 0.85);
+  const minLag = Math.floor(sampleRate / 1200);  // ~1200 Hz ceiling
+  const maxLag = Math.floor(sampleRate / floor);
+  let bestLag = -1;
+  let bestCorr = 0;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let corr = 0;
+    for (let i = 0; i < buf.length - lag; i++) corr += buf[i] * buf[i + lag];
+    const norm = corr / (buf.length - lag);
+    if (norm > bestCorr) {
+      bestCorr = norm;
+      bestLag = lag;
+    }
+  }
+  if (bestLag < 0 || bestCorr < 0.01) return null;
+
+  // Parabolic interpolation around the peak lag
+  let y0 = 0, y2 = 0;
+  for (let i = 0; i < buf.length - (bestLag - 1); i++) y0 += buf[i] * buf[i + bestLag - 1];
+  y0 /= (buf.length - (bestLag - 1));
+  for (let i = 0; i < buf.length - (bestLag + 1); i++) y2 += buf[i] * buf[i + bestLag + 1];
+  y2 /= (buf.length - (bestLag + 1));
+  const y1 = bestCorr;
+  const denom = 2 * (2 * y1 - y0 - y2);
+  const shift = denom ? (y0 - y2) / denom : 0;
+  const lag = bestLag + Math.max(-1, Math.min(1, shift));
+  return sampleRate / lag;
+}
 const confLevel = s => (s < 0.55 ? "low" : s < 0.75 ? "mid" : "ok");
 const confBadge = (label, score, title = "") =>
   `<span class="conf-badge ${confLevel(score)}" title="${esc(title || "")}">${esc(label)} ${Math.round(score * 100)}%</span>`;
-const confMeters = conf => {
+const confOverallBtn = (score, title = "") =>
+  `<button type="button" class="conf-badge conf-overall ${confLevel(score)}" id="confOverall"
+    title="${esc(title || "Show confidence breakdown")}">overall ${Math.round(score * 100)}%</button>`;
+const confMetersHtml = conf => {
   const parts = Object.entries(conf.by_part || {});
   if (!parts.length) return "";
-  return `<div class="conf-panel no-print" title="${esc(conf.disclaimer || "")}">
-    <div class="conf-title">Confidence (review low scores — not a guarantee)</div>
-    <div class="conf-parts">${parts.map(([k, v]) => {
-      const why = ((conf.part_reasons || {})[k] || []).join("; ");
-      return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${Math.round(v * 100)}%"></i><em>${Math.round(v * 100)}%</em></div>`;
-    }).join("")}</div>
-  </div>`;
+  return `<div class="conf-parts">${parts.map(([k, v]) => {
+    const why = ((conf.part_reasons || {})[k] || []).join("; ");
+    return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${Math.round(v * 100)}%"></i><em>${Math.round(v * 100)}%</em></div>`;
+  }).join("")}</div>`;
 };
+
+let confModalEsc = null;
+
+function openConfidenceModal(conf, { auto = false, onDismiss } = {}) {
+  if (!conf) return;
+  closeConfidenceModal();
+  const overlay = document.createElement("div");
+  overlay.className = "conf-modal-overlay no-print";
+  overlay.id = "confModal";
+  overlay.innerHTML = `
+    <div class="conf-modal" role="dialog" aria-modal="true" aria-labelledby="confModalTitle">
+      <div class="conf-modal-head">
+        <h2 id="confModalTitle">Confidence</h2>
+        <button type="button" class="conf-modal-close" id="confModalClose" aria-label="Close">×</button>
+      </div>
+      <p class="conf-modal-overall">
+        <span class="conf-badge ${confLevel(conf.overall)}">overall ${Math.round(conf.overall * 100)}%</span>
+      </p>
+      ${confMetersHtml(conf)}
+      <p class="conf-modal-note">${esc(conf.disclaimer || "Scores flag uncertainty — not accuracy guarantees.")}</p>
+      <button type="button" class="primary" id="confModalOk">${auto ? "Got it" : "Close"}</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const dismiss = () => {
+    closeConfidenceModal();
+    onDismiss?.();
+  };
+  overlay.querySelector("#confModalClose").onclick = dismiss;
+  overlay.querySelector("#confModalOk").onclick = dismiss;
+  overlay.addEventListener("click", e => { if (e.target === overlay) dismiss(); });
+  confModalEsc = e => { if (e.key === "Escape") dismiss(); };
+  document.addEventListener("keydown", confModalEsc);
+}
+
+function closeConfidenceModal() {
+  if (confModalEsc) {
+    document.removeEventListener("keydown", confModalEsc);
+    confModalEsc = null;
+  }
+  document.getElementById("confModal")?.remove();
+}
 
 let timers = [];
 let cleanupFns = [];
+const playbarEl = () => document.getElementById("playbar");
+
+function hidePlaybar() {
+  const bar = playbarEl();
+  if (!bar) return;
+  bar.hidden = true;
+  bar.innerHTML = "";
+  document.body.classList.remove("has-playbar");
+}
+
+function clearSidebarMeta() {
+  const el = document.getElementById("sidebarMeta");
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
 function cleanup() {
   timers.forEach(clearTimeout);
   timers = [];
   cleanupFns.forEach(fn => fn());
   cleanupFns = [];
+  closeConfidenceModal();
+  hidePlaybar();
+  clearSidebarMeta();
 }
 
 function route() {
   cleanup();
   const m = location.hash.match(/^#\/job\/(\w+)/);
-  if (m) showJob(m[1]); else showLibrary();
+  if (m) showJob(m[1]);
+  else if (/^#\/create\/?$/.test(location.hash)) showCreate();
+  else if (/^#\/record\/?$/.test(location.hash)) showRecord();
+  else if (/^#\/tuner\/?$/.test(location.hash)) showTuner();
+  else if (/^#\/tab-your-own\/?$/.test(location.hash)) showTabYourOwn();
+  else if (/^#\/library\/?$/.test(location.hash)) showLibraryGrid();
+  else if (/^#\/upload\/?$/.test(location.hash)) showLibrary();
+  else if (location.hash === "#/" || location.hash === "" || location.hash === "#") showCreate();
+  else showLibrary();
+  refreshSidebar();
+  syncSidebarChrome();
 }
 window.addEventListener("hashchange", route);
+
+/* ---------------- Sidebar library ---------------- */
+
+function currentJobId() {
+  const m = location.hash.match(/^#\/job\/(\w+)/);
+  return m ? m[1] : null;
+}
+
+function setSidebarOpen(open) {
+  document.body.classList.toggle("sidebar-open", open);
+  const btn = document.getElementById("sidebarToggle");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (btn) btn.setAttribute("aria-label", open ? "Close library menu" : "Open library menu");
+  if (backdrop) backdrop.hidden = !open;
+}
+
+function shortTuningLabel(name) {
+  if (name === "Standard") return "Std";
+  if (name === "Half step down") return "½↓";
+  if (name === "Whole step down") return "1↓";
+  if (name.startsWith("Drop ")) return "Dr" + name.slice(5).replace(/\s/g, "");
+  if (name.startsWith("Open ")) return "O" + name.slice(5, 6);
+  return name.slice(0, 3);
+}
+
+function syncSidebarToolDensity() {
+  const collapsed = document.body.classList.contains("sidebar-collapsed");
+  document.querySelectorAll("#sidebarMeta select.tool-select option").forEach(opt => {
+    if (!opt.dataset.full) opt.dataset.full = opt.textContent;
+    if (!opt.dataset.short) {
+      const sel = opt.closest("select");
+      if (sel?.id === "capo") opt.dataset.short = opt.value === "0" ? "C0" : `C${opt.value}`;
+      else opt.dataset.short = shortTuningLabel(opt.dataset.full || opt.value || opt.textContent);
+    }
+    opt.textContent = collapsed ? opt.dataset.short : opt.dataset.full;
+  });
+}
+
+function setFootIcon(btn, name) {
+  const host = btn?.querySelector(".sidebar-foot-icon");
+  if (!host) return;
+  if (window.MSIcons) MSIcons.set(host, name);
+  else host.setAttribute("data-ms-icon", name);
+}
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  store.set("sidebarCollapsed", collapsed);
+  const btn = document.getElementById("sidebarCollapse");
+  if (btn) {
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    btn.title = collapsed ? "Expand Menu" : "Collapse Menu";
+    setFootIcon(btn, collapsed ? "menu" : "panel-left-close");
+    const label = btn.querySelector(".sidebar-foot-label");
+    if (label) label.textContent = "Menu";
+  }
+  syncSidebarToolDensity();
+}
+
+function setDarkMode(dark) {
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  store.set("darkMode", dark);
+  const btn = document.getElementById("sidebarTheme");
+  if (btn) {
+    setFootIcon(btn, dark ? "sun" : "moon");
+    const label = btn.querySelector(".sidebar-foot-label");
+    if (label) label.textContent = dark ? "Light" : "Dark";
+    btn.title = dark ? "Light Mode" : "Dark Mode";
+    btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  }
+}
+
+function setSidebarSide(side) {
+  const right = side === "right";
+  document.body.classList.toggle("sidebar-right", right);
+  store.set("sidebarSide", right ? "right" : "left");
+  const btn = document.getElementById("sidebarFlip");
+  if (btn) {
+    btn.title = "Flip Sidebar";
+    btn.setAttribute("aria-label", right ? "Move sidebar to the left" : "Move sidebar to the right");
+  }
+}
+
+function syncSidebarChrome() {
+  const library = document.getElementById("headerLibrary");
+  const create = document.getElementById("headerCreate");
+  const onLibrary = /^#\/library\/?$/.test(location.hash);
+  const onCreateFlow = /^#\/(create|upload|record|tuner|tab-your-own)\/?$/.test(location.hash)
+    || location.hash === "#/" || location.hash === "" || location.hash === "#";
+  if (library) library.classList.toggle("on", onLibrary);
+  if (create) create.classList.toggle("on", onCreateFlow && !onLibrary && !currentJobId());
+  // Library grid / song page: hide the duplicate sidebar song list.
+  document.body.classList.toggle("on-library-page", onLibrary);
+  document.body.classList.toggle("on-song-page", !!currentJobId());
+  // Close the drawer after navigating on narrow screens
+  if (window.matchMedia("(max-width: 900px)").matches) setSidebarOpen(false);
+}
+
+async function refreshSidebar() {
+  const el = document.getElementById("sidebarJobs");
+  if (!el) return;
+  let jobs;
+  try { jobs = await api.list(); } catch {
+    el.innerHTML = `<p class="sidebar-empty">Couldn't load library.</p>`;
+    return;
+  }
+  if (!jobs.length) {
+    el.innerHTML = `<p class="sidebar-empty">No songs yet — use Create to add one.</p>`;
+    return;
+  }
+  const active = currentJobId();
+  el.innerHTML = jobs.map(j => {
+    const busy = j.status === "running" || j.status === "queued";
+    const meta = busy
+      ? (j.stage_label || j.status)
+      : new Date(j.created * 1000).toLocaleDateString();
+    const on = j.id === active ? " on" : "";
+    return `<a class="sidebar-job${on}" href="#/job/${j.id}" title="${esc(j.title)}">
+      <span class="sidebar-title">${esc(j.title)}</span>
+      <span class="badge ${j.status}">${j.status === "done" ? "ready" : j.status}</span>
+      <span class="sidebar-meta">${esc(meta)}</span>
+    </a>`;
+  }).join("");
+  if (jobs.some(j => j.status === "running" || j.status === "queued")) {
+    timers.push(setTimeout(refreshSidebar, 2000));
+  }
+}
+
+function initSidebar() {
+  const toggle = document.getElementById("sidebarToggle");
+  const collapse = document.getElementById("sidebarCollapse");
+  const themeBtn = document.getElementById("sidebarTheme");
+  const flipBtn = document.getElementById("sidebarFlip");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  toggle?.addEventListener("click", () => {
+    setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+  });
+  collapse?.addEventListener("click", () => {
+    setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+  });
+  themeBtn?.addEventListener("click", () => {
+    setDarkMode(document.documentElement.dataset.theme !== "dark");
+  });
+  flipBtn?.addEventListener("click", () => {
+    setSidebarSide(document.body.classList.contains("sidebar-right") ? "left" : "right");
+  });
+  backdrop?.addEventListener("click", () => setSidebarOpen(false));
+  setDarkMode(!!store.get("darkMode", false));
+  setSidebarSide(store.get("sidebarSide", "left") === "right" ? "right" : "left");
+  setSidebarCollapsed(!!store.get("sidebarCollapsed", false));
+  // Hydrate any remaining data-ms-icon hosts (e.g. Flip) + header Lucide marks.
+  document.querySelectorAll("[data-ms-icon]").forEach(host => {
+    if (host.querySelector("svg, [data-lucide]")) return;
+    const name = host.getAttribute("data-ms-icon");
+    if (name) setFootIcon(host.closest("button") || host.parentElement, name);
+  });
+  // Flip is not updated by setDarkMode/collapse — paint from its data-ms-icon.
+  const flipIcon = document.querySelector("#sidebarFlip .sidebar-foot-icon");
+  if (flipIcon && !flipIcon.querySelector("svg")) {
+    const name = flipIcon.getAttribute("data-ms-icon") || "arrow-left-right";
+    if (window.MSIcons) MSIcons.set(flipIcon, name);
+  }
+  window.MSIcons?.paint(document);
+  refreshSidebar();
+  syncSidebarChrome();
+}
+
+let splashTimer = null;
+let splashRemoveTimer = null;
+
+function dismissSplash() {
+  const el = document.getElementById("splash");
+  if (!el || el.dataset.done === "1") return;
+  el.dataset.done = "1";
+  if (splashTimer) { clearTimeout(splashTimer); splashTimer = null; }
+  el.classList.add("splash-out");
+  document.body.classList.remove("splash-active");
+  const btn = document.getElementById("splashContinue");
+  btn?.setAttribute("aria-hidden", "true");
+  // Keep outside route() cleanup timers so hash navigation doesn't yank the fade.
+  if (splashRemoveTimer) clearTimeout(splashRemoveTimer);
+  splashRemoveTimer = setTimeout(() => el.remove(), 500);
+}
+
+function initSplash() {
+  const el = document.getElementById("splash");
+  const btn = document.getElementById("splashContinue");
+  if (!el) {
+    document.body.classList.remove("splash-active");
+    return;
+  }
+  const go = () => dismissSplash();
+  // Click/tap anywhere on the splash (including Get started) continues.
+  el.addEventListener("click", go);
+  el.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+      e.preventDefault();
+      go();
+    }
+  });
+  // Brief hold, then fade into home/library.
+  splashTimer = setTimeout(go, 2200);
+  btn?.focus({ preventScroll: true });
+}
+
+initSplash();
+initSidebar();
 route();
 
-/* ---------------- Library ---------------- */
+/* ---------------- Create hub ---------------- */
+
+function showCreate() {
+  app.innerHTML = `
+    <section class="create-page">
+      <header class="create-page-head">
+        <h1>Create</h1>
+        <p class="lede">Choose how you want to start a song.</p>
+      </header>
+      <div class="create-tiles" role="list">
+        <a class="create-tile" href="#/upload" role="listitem" title="Upload an audio or video file">
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("upload", "create-tile-ico") : "↑"}</span>
+          <span class="create-tile-label">Upload</span>
+          <span class="create-tile-desc">MP3, WAV, FLAC, M4A, or video</span>
+        </a>
+        <a class="create-tile" href="#/record" role="listitem" title="Record with your microphone">
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("mic", "create-tile-ico") : "●"}</span>
+          <span class="create-tile-label">Record</span>
+          <span class="create-tile-desc">Capture audio from your mic</span>
+        </a>
+        <a class="create-tile" href="#/tab-your-own" role="listitem" title="Paste lyrics and add your own chords">
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("file-music", "create-tile-ico") : "♪"}</span>
+          <span class="create-tile-label">Tab</span>
+          <span class="create-tile-desc">Lyrics and chords, no audio</span>
+        </a>
+        <a class="create-tile" href="#/tuner" role="listitem" title="Tune your guitar with the microphone">
+          <span class="create-tile-mark">${window.MSIcons ? MSIcons.el("guitar", "create-tile-ico") : "♮"}</span>
+          <span class="create-tile-label">Tuner</span>
+          <span class="create-tile-desc">Guitar, bass, uke, strings…</span>
+        </a>
+      </div>
+    </section>`;
+  window.MSIcons?.paint(app);
+}
+
+/* ---------------- Instrument tuner (mic pitch) ---------------- */
+
+function showTuner() {
+  const savedId = store.get("tunerInstrument", "guitar");
+  let instrument = TUNER_INSTRUMENTS.find(i => i.id === savedId) || TUNER_INSTRUMENTS[0];
+
+  app.innerHTML = `
+    <section class="tuner-page">
+      <header class="tuner-head">
+        <h1>Tuner</h1>
+        <p class="lede">Pick an instrument, then play a string — pitch is read from your microphone.</p>
+      </header>
+      <div class="tuner-instrument" role="radiogroup" aria-label="Instrument">
+        ${TUNER_INSTRUMENTS.map(i => `
+          <button type="button" class="tuner-inst-btn${i.id === instrument.id ? " on" : ""}"
+            role="radio" aria-checked="${i.id === instrument.id ? "true" : "false"}"
+            data-id="${i.id}" title="${esc(i.label)}" aria-label="${esc(i.label)}">
+            <span class="tuner-ico">${window.MSIcons ? MSIcons.el(TUNER_ICONS[i.id] || "music") : ""}</span>
+            <span class="tuner-inst-label">${esc(i.label)}</span>
+          </button>`).join("")}
+      </div>
+      <div class="tuner-panel" id="tunerPanel">
+        <div class="tuner-note" id="tunerNote">—</div>
+        <div class="tuner-cents" id="tunerCents">Listen…</div>
+        <div class="tuner-meter" aria-hidden="true">
+          <div class="tuner-meter-track">
+            <span class="tuner-meter-mark" style="left:0%"></span>
+            <span class="tuner-meter-mark mid" style="left:50%"></span>
+            <span class="tuner-meter-mark" style="left:100%"></span>
+            <div class="tuner-meter-needle" id="tunerNeedle" style="left:50%"></div>
+          </div>
+          <div class="tuner-meter-labels"><span>−50¢</span><span>0</span><span>+50¢</span></div>
+        </div>
+        <div class="tuner-hz" id="tunerHz"></div>
+        <div class="tuner-strings" id="tunerStrings"></div>
+        <canvas class="tuner-wave" id="tunerWave" width="640" height="80" aria-hidden="true"></canvas>
+        <p class="tuner-status" id="tunerStatus">Starting microphone…</p>
+        <button type="button" class="primary" id="tunerToggle" hidden>Start tuner</button>
+      </div>
+    </section>`;
+
+  const noteEl = app.querySelector("#tunerNote");
+  const centsEl = app.querySelector("#tunerCents");
+  const needleEl = app.querySelector("#tunerNeedle");
+  const hzEl = app.querySelector("#tunerHz");
+  const statusEl = app.querySelector("#tunerStatus");
+  const toggleBtn = app.querySelector("#tunerToggle");
+  const stringsEl = app.querySelector("#tunerStrings");
+  const instrumentGroup = app.querySelector(".tuner-instrument");
+  const wave = app.querySelector("#tunerWave");
+  const waveCtx = wave.getContext("2d");
+
+  let audioCtx = null;
+  let stream = null;
+  let analyser = null;
+  let buf = null;
+  let raf = 0;
+  let running = false;
+  let smoothCents = 0;
+
+  function renderStrings() {
+    stringsEl.innerHTML = instrument.strings
+      .map(s => `<span class="tuner-string" data-name="${esc(s.name)}">${esc(s.name)}</span>`)
+      .join("");
+  }
+
+  function drawWave(data) {
+    const w = wave.width;
+    const h = wave.height;
+    waveCtx.clearRect(0, 0, w, h);
+    waveCtx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--edu-blue-600").trim() || "#2563eb";
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    const step = Math.max(1, Math.floor(data.length / w));
+    for (let x = 0; x < w; x++) {
+      const v = data[x * step] || 0;
+      const y = (0.5 - v * 0.45) * h;
+      if (x === 0) waveCtx.moveTo(x, y);
+      else waveCtx.lineTo(x, y);
+    }
+    waveCtx.stroke();
+  }
+
+  function highlightString(label) {
+    stringsEl.querySelectorAll(".tuner-string").forEach(el => {
+      el.classList.toggle("on", el.dataset.name === label);
+    });
+  }
+
+  function tick() {
+    if (!running || !analyser) return;
+    analyser.getFloatTimeDomainData(buf);
+    drawWave(buf);
+    const hz = detectPitchHz(buf, audioCtx.sampleRate, instrument.minHz);
+    if (hz) {
+      const note = freqToNote(hz);
+      smoothCents = smoothCents * 0.7 + note.cents * 0.3;
+      const cents = Math.round(smoothCents);
+      const inTune = Math.abs(cents) <= 5;
+      noteEl.textContent = note.label;
+      noteEl.classList.toggle("in-tune", inTune);
+      centsEl.textContent = cents === 0 ? "In tune" : `${cents > 0 ? "+" : ""}${cents} cents`;
+      centsEl.classList.toggle("in-tune", inTune);
+      const clamped = Math.max(-50, Math.min(50, smoothCents));
+      needleEl.style.left = `${((clamped + 50) / 100) * 100}%`;
+      needleEl.classList.toggle("in-tune", inTune);
+      hzEl.textContent = `${hz.toFixed(1)} Hz`;
+      // Closest open string for the selected instrument (within ~1 semitone)
+      let closest = null;
+      let best = Infinity;
+      for (const s of instrument.strings) {
+        const diff = Math.abs(12 * Math.log2(hz / s.hz));
+        if (diff < best) { best = diff; closest = s.name; }
+      }
+      highlightString(best < 0.6 ? closest : null);
+      statusEl.textContent = "Listening";
+    } else {
+      statusEl.textContent = "Play a note…";
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function selectInstrument(id) {
+    instrument = TUNER_INSTRUMENTS.find(i => i.id === id) || TUNER_INSTRUMENTS[0];
+    store.set("tunerInstrument", instrument.id);
+    instrumentGroup.querySelectorAll(".tuner-inst-btn").forEach(btn => {
+      const on = btn.dataset.id === instrument.id;
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+    });
+    renderStrings();
+    highlightString(null);
+    noteEl.textContent = "—";
+    noteEl.classList.remove("in-tune");
+    centsEl.textContent = "Listen…";
+    centsEl.classList.remove("in-tune");
+    needleEl.style.left = "50%";
+    needleEl.classList.remove("in-tune");
+    hzEl.textContent = "";
+    smoothCents = 0;
+  }
+  instrumentGroup.querySelectorAll(".tuner-inst-btn").forEach(btn => {
+    btn.onclick = () => selectInstrument(btn.dataset.id);
+  });
+  renderStrings();
+  window.MSIcons?.paint(app);
+
+  async function start() {
+    statusEl.textContent = "Starting microphone…";
+    toggleBtn.hidden = true;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      // Larger buffer helps low bass fundamentals
+      analyser.fftSize = 8192;
+      src.connect(analyser);
+      buf = new Float32Array(analyser.fftSize);
+      running = true;
+      statusEl.textContent = "Listening";
+      tick();
+    } catch (e) {
+      statusEl.textContent = `Microphone unavailable: ${e.message}`;
+      toggleBtn.hidden = false;
+      toggleBtn.textContent = "Try again";
+    }
+  }
+
+  function stop() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    try { stream?.getTracks().forEach(t => t.stop()); } catch { /* ignore */ }
+    try { audioCtx?.close(); } catch { /* ignore */ }
+    stream = null;
+    audioCtx = null;
+    analyser = null;
+  }
+
+  toggleBtn.onclick = () => start();
+  cleanupFns.push(stop);
+  start();
+}
+
+/* ---------------- Record (microphone) ---------------- */
+
+function showRecord() {
+  const opts = store.get("opts", { whisper_model: "small", language: "" });
+  app.innerHTML = `
+    <section class="home-hero record-hero">
+      <h1>Record</h1>
+      <p class="lede">Capture a take with your microphone. Everything stays on this computer.</p>
+      <button class="primary" id="rec">Start recording</button>
+      <div class="options">
+        <label>Lyrics quality
+          <select id="wm">
+            <option value="small">Fast (small)</option>
+            <option value="medium">Better (medium)</option>
+            <option value="large-v3-turbo">Best (large-v3-turbo)</option>
+          </select>
+        </label>
+        <label>Language
+          <select id="lang">
+            <option value="">Auto-detect</option>
+            ${["en English", "es Spanish", "fr French", "de German", "it Italian", "pt Portuguese", "nl Dutch", "sv Swedish", "ja Japanese", "ko Korean", "zh Chinese"]
+              .map(s => `<option value="${s.slice(0, 2)}">${s.slice(3)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <p id="status" style="margin:14px 0 0"></p>
+    </section>`;
+  const wm = app.querySelector("#wm");
+  const lang = app.querySelector("#lang");
+  const status = app.querySelector("#status");
+  const recBtn = app.querySelector("#rec");
+  wm.value = opts.whisper_model;
+  lang.value = opts.language;
+  const currentOpts = () => {
+    const o = { whisper_model: wm.value, language: lang.value };
+    store.set("opts", o);
+    return o;
+  };
+  async function upload(file) {
+    status.innerHTML = `<span class="upload-busy"><img class="wizard-line-art" src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
+    try {
+      const meta = await api.upload(file, currentOpts());
+      location.hash = `#/job/${meta.id}`;
+    } catch (e) {
+      status.textContent = `Upload failed: ${e.message}`;
+    }
+  }
+  let recorder = null;
+  recBtn.onclick = async () => {
+    if (recorder) { recorder.stop(); return; }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    } catch (e) {
+      status.textContent = `Microphone unavailable: ${e.message}`;
+      return;
+    }
+    const chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      recorder = null;
+      clearInterval(tick);
+      recBtn.textContent = "Start recording";
+      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+      upload(new File(chunks, `Recording ${stamp}.webm`, { type: "audio/webm" }));
+    };
+    recorder.start();
+    const t0 = Date.now();
+    const tick = setInterval(() => { recBtn.innerHTML = `<span class="rec-dot"></span>Stop (${fmtTime((Date.now() - t0) / 1000)})`; }, 250);
+    cleanupFns.push(() => { if (recorder) { recorder.onstop = null; recorder.stop(); stream.getTracks().forEach(t => t.stop()); clearInterval(tick); } });
+  };
+}
+
+/* ---------------- Tab your own (no audio) ---------------- */
+
+function showTabYourOwn() {
+  app.innerHTML = `
+    <section class="tabown-hero">
+      <h1>Tab your own</h1>
+      <p class="lede">Paste lyrics, then add chords on the paper sheet. No audio required — saved in your local library.</p>
+      <label class="tabown-field">Title
+        <input type="text" id="tabownTitle" placeholder="Song title (optional)" maxlength="200">
+      </label>
+      <label class="tabown-field">Lyrics
+        <textarea id="tabownLyrics" class="tabown-lyrics" spellcheck="true"
+          placeholder="Paste lyrics here…&#10;&#10;VERSE&#10;When the night is long&#10;&#10;CHORUS&#10;Hold the line"></textarea>
+      </label>
+      <div class="tabown-actions">
+        <button class="primary" id="tabownCreate">Create sheet</button>
+        <span id="tabownStatus" class="hint" style="margin:0"></span>
+      </div>
+    </section>`;
+  const titleEl = app.querySelector("#tabownTitle");
+  const lyricsEl = app.querySelector("#tabownLyrics");
+  const status = app.querySelector("#tabownStatus");
+  const create = app.querySelector("#tabownCreate");
+  lyricsEl.focus();
+  create.onclick = async () => {
+    const lyrics = lyricsEl.value.trim();
+    if (!lyrics) { status.textContent = "Paste some lyrics first."; return; }
+    create.disabled = true;
+    status.textContent = "Creating…";
+    try {
+      const job = await api.createManual(titleEl.value.trim(), lyrics);
+      location.hash = `#/job/${job.id}`;
+    } catch (e) {
+      status.textContent = `Couldn't create: ${e.message}`;
+      create.disabled = false;
+    }
+  };
+}
+
+/* ---------------- Library grid (all songs) ---------------- */
+
+async function showLibraryGrid() {
+  app.innerHTML = `
+    <section class="library-page">
+      <header class="library-page-head">
+        <h1>Library</h1>
+        <p class="lede">All songs on this device.</p>
+      </header>
+      <div class="library-grid" id="libraryGrid">
+        <p class="empty">Loading…</p>
+      </div>
+    </section>`;
+  await refreshLibraryGrid();
+}
+
+async function refreshLibraryGrid() {
+  const el = document.getElementById("libraryGrid");
+  refreshSidebar();
+  if (!el) return;
+  let jobs;
+  try { jobs = await api.list(); } catch {
+    el.innerHTML = `<p class="empty">Couldn't load library.</p>`;
+    return;
+  }
+  if (!jobs.length) {
+    el.innerHTML = `<p class="empty">No songs yet — <a href="#/create">Create</a> one.</p>`;
+    return;
+  }
+  el.innerHTML = jobs.map(j => {
+    const busy = j.status === "running" || j.status === "queued";
+    const meta = busy
+      ? (j.stage_label || j.status)
+      : new Date(j.created * 1000).toLocaleDateString();
+    return `<a class="library-card" href="#/job/${j.id}" title="${esc(j.title)}">
+      <span class="library-card-title">${esc(j.title)}</span>
+      <span class="badge ${j.status}">${j.status === "done" ? "ready" : j.status}</span>
+      ${busy ? `<span class="bar"><i style="width:${Math.round((j.progress || 0) * 100)}%"></i></span>` : ""}
+      <span class="library-card-meta">${esc(meta)}</span>
+    </a>`;
+  }).join("");
+  if (jobs.some(j => j.status === "running" || j.status === "queued")) {
+    timers.push(setTimeout(refreshLibraryGrid, 2000));
+  }
+}
+
+/* ---------------- Home (upload-first) ---------------- */
 
 function showLibrary() {
   const opts = store.get("opts", { whisper_model: "small", language: "" });
   app.innerHTML = `
-    <div class="privacy-banner" id="privacyBanner">
-      <strong>Private by default.</strong>
-      <span id="privacyText">Loading privacy status…</span>
-      <button id="clearLocal" title="Delete ephemeral jobs and browser prefs on this machine">Clear local data</button>
-    </div>
-    <section class="drop" id="drop">
-      <h2>Drop a song here</h2>
-      <p>MP3, WAV, FLAC, M4A, video files, or record from your microphone. Files stay on this machine — no cloud upload, no accounts.</p>
+    <section class="home-hero drop" id="drop">
+      <h1>Upload your song</h1>
+      <p class="lede">Drop an MP3, WAV, FLAC, M4A, or video — or pick a file. Everything stays on this computer.</p>
       <input type="file" id="file" accept="audio/*,video/*" hidden>
-      <button class="primary" id="pick">Choose file</button>
-      <button id="rec">🎙 Record</button>
+      <button class="primary" id="pick">Choose a file</button>
       <div class="options">
         <label>Lyrics quality
           <select id="wm">
@@ -147,7 +948,15 @@ function showLibrary() {
       </div>
       <p id="status" style="margin:14px 0 0"></p>
     </section>
-    <div class="jobs" id="jobs"></div>`;
+    <section class="home-recent">
+      <h2>Recent on this device</h2>
+      <div class="jobs" id="jobs"></div>
+    </section>
+    <div class="privacy-banner" id="privacyBanner">
+      <strong>Private by default.</strong>
+      <span id="privacyText">Loading privacy status…</span>
+      <button id="clearLocal" title="Delete ephemeral jobs and browser prefs on this machine">Clear local data</button>
+    </div>`;
 
   api.privacy().then(p => {
     app.querySelector("#privacyText").textContent = p.promise;
@@ -160,7 +969,7 @@ function showLibrary() {
     try {
       if (window.LocalStore) await LocalStore.clearAllLocalData();
       else await api.clearLocal();
-      location.hash = "#/";
+      location.hash = "#/create";
       route();
     } catch (e) {
       alert(`Clear failed: ${e.message}`);
@@ -181,7 +990,7 @@ function showLibrary() {
   };
 
   async function upload(file) {
-    status.textContent = `Uploading ${file.name}…`;
+    status.innerHTML = `<span class="upload-busy"><img class="wizard-line-art" src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
     try {
       const meta = await api.upload(file, currentOpts());
       location.hash = `#/job/${meta.id}`;
@@ -201,45 +1010,17 @@ function showLibrary() {
     if (f) upload(f);
   });
 
-  // Microphone recording
-  const recBtn = app.querySelector("#rec");
-  let recorder = null;
-  recBtn.onclick = async () => {
-    if (recorder) { recorder.stop(); return; }
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    } catch (e) {
-      status.textContent = `Microphone unavailable: ${e.message}`;
-      return;
-    }
-    const chunks = [];
-    recorder = new MediaRecorder(stream);
-    recorder.ondataavailable = e => chunks.push(e.data);
-    recorder.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      recorder = null;
-      clearInterval(tick);
-      recBtn.innerHTML = "🎙 Record";
-      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-      upload(new File(chunks, `Recording ${stamp}.webm`, { type: "audio/webm" }));
-    };
-    recorder.start();
-    const t0 = Date.now();
-    const tick = setInterval(() => { recBtn.innerHTML = `<span class="rec-dot"></span>Stop (${fmtTime((Date.now() - t0) / 1000)})`; }, 250);
-    cleanupFns.push(() => { if (recorder) { recorder.onstop = null; recorder.stop(); stream.getTracks().forEach(t => t.stop()); clearInterval(tick); } });
-  };
-
   refreshList();
 }
 
 async function refreshList() {
   const el = document.getElementById("jobs");
+  refreshSidebar();
   if (!el) return;
   let jobs;
   try { jobs = await api.list(); } catch { return; }
   if (!jobs.length) {
-    el.innerHTML = `<p class="empty">No songs yet. Your transcriptions will appear here.</p>`;
+    el.innerHTML = `<p class="empty">No songs yet — upload one above to get started.</p>`;
     return;
   }
   el.innerHTML = jobs.map(j => {
@@ -259,6 +1040,7 @@ async function refreshList() {
       if (btn.dataset.armed) {
         await api.del(btn.dataset.del).catch(() => {});
         refreshList();
+        refreshSidebar();
       } else {
         btn.dataset.armed = "1";
         btn.textContent = "Confirm?";
@@ -276,7 +1058,7 @@ async function refreshList() {
 async function showJob(id) {
   let job;
   try { job = await api.get(id); } catch (e) {
-    app.innerHTML = `<p class="empty">Couldn't load this song: ${esc(e.message)}. <a href="#/">Back</a></p>`;
+    app.innerHTML = `<p class="empty">Couldn't load this song: ${esc(e.message)}. <a href="#/create">Back</a></p>`;
     return;
   }
   if (job.status === "done" && job.result) showSong(job);
@@ -286,11 +1068,24 @@ async function showJob(id) {
 function showProgress(job) {
   const idx = STAGES.findIndex(([id]) => id === job.stage);
   const failed = job.status === "error";
+  const pct = Math.max(0, Math.min(100, Math.round((job.progress || 0) * 100)));
+  const statusLine = failed
+    ? "Processing failed"
+    : job.status === "queued" && idx < 0
+      ? "Waiting in queue…"
+      : esc(job.stage_label || "Working…");
   app.innerHTML = `
-    <div class="progress-card">
+    <div class="progress-card loading-card">
+      <img class="loading-hero wizard-line-art" src="/assets/wizard-sax.webp?v=3" alt="" width="220" height="256"
+           onerror="this.onerror=null;this.src='/assets/wizard-sax.png?v=3'">
       <h2 style="margin:0">${esc(job.title)}</h2>
-      <p class="facts" style="margin:6px 0 0">${failed ? "Processing failed" : job.status === "queued" && idx < 0 ? "Waiting in queue…" : esc(job.stage_label || "")}</p>
-      <div class="bar bigbar"><i style="width:${Math.round((job.progress || 0) * 100)}%"></i></div>
+      <p class="facts" style="margin:6px 0 0">${statusLine}</p>
+      <div class="progress-row">
+        <div class="progress-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+          <span class="progress-fill" style="width:${pct}%"></span>
+        </div>
+        <span class="progress-pct">${pct}%</span>
+      </div>
       <ul class="stages">
         ${STAGES.map(([id, label], i) => `<li class="${i < idx ? "done" : i === idx ? (failed ? "failed" : "active") : ""}">${label}</li>`).join("")}
       </ul>
@@ -370,44 +1165,70 @@ function showSong(job) {
     return out;
   }
 
-  app.innerHTML = `
-    <div class="song-head">
-      <h1 contenteditable="true" spellcheck="false" id="title">${esc(job.title)}</h1>
+  const metaEl = document.getElementById("sidebarMeta");
+  if (metaEl) {
+    metaEl.hidden = false;
+    metaEl.innerHTML = `
+      <div class="sidebar-song-title" id="sidebarSongTitle" title="${esc(job.title)}">${esc(job.title)}</div>
+      <hr class="sidebar-meta-rule title-rule" aria-hidden="true">
       <div class="facts">
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
         <span>Length <b>${fmtTime(r.duration)}</b></span>
-        ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Guitar tab ← ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
-        ${r.confidence ? confBadge("overall", r.confidence.overall, r.confidence.disclaimer) : ""}
+        ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Source: ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
+        ${(job.manual || r.manual || r.no_audio) ? `<span class="source-badge">Tab your own</span>` : ""}
+        ${r.confidence ? confOverallBtn(r.confidence.overall, r.confidence.disclaimer) : ""}
       </div>
-      ${r.confidence ? confMeters(r.confidence) : ""}
-    </div>
-    <div class="player">
-      <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
-      <audio id="audio" controls preload="auto" src="/api/jobs/${id}/audio/mix"></audio>
-      <div class="controls">
-        <select id="stem" title="What to listen to">
-          ${["mix", ...r.stems].map(s => `<option value="${s}">${STEM_LABELS[s] || s}</option>`).join("")}
-        </select>
-        <select id="tuning" title="Your guitar's tuning: chord names, diagrams and tab follow it">
-          ${TUNINGS.map(([n]) => `<option>${n}</option>`).join("")}
-        </select>
-        <select id="capo" title="Capo">
-          ${Array.from({ length: 10 }, (_, c) => `<option value="${c}">${c ? `Capo ${c}` : "No capo"}</option>`).join("")}
-        </select>
-        <div class="transpose" title="Transpose to another key (resets when you change tuning or capo)">
-          <button id="down">−</button><span id="semis"></span><button id="up">+</button>
+      <hr class="sidebar-meta-rule">
+      <div class="sidebar-song-tools no-print">
+        <div class="controls">
+          <select id="tuning" class="tool-select" title="Your guitar's tuning: chord names, diagrams and tab follow it" aria-label="Tuning">
+            ${TUNINGS.map(([n]) => `<option value="${esc(n)}" data-short="${n === "Standard" ? "Std" : esc(n.slice(0, 3))}">${n}</option>`).join("")}
+          </select>
+          <select id="capo" class="tool-select" title="Capo" aria-label="Capo">
+            ${Array.from({ length: 10 }, (_, c) => `<option value="${c}" data-short="${c ? `C${c}` : "C0"}">${c ? `Capo ${c}` : "No capo"}</option>`).join("")}
+          </select>
+          <div class="transpose" title="Transpose to another key (resets when you change tuning or capo)">
+            <button type="button" id="down" aria-label="Transpose down">−</button>
+            <span id="semis"></span>
+            <button type="button" id="up" aria-label="Transpose up">+</button>
+          </div>
+          <label class="tool-check" title="Show plain major/minor chords (Gsus2 → G, Dmaj7 → D)">
+            <input type="checkbox" id="simple">
+            <span class="tool-full">Simple chords</span>
+            <span class="tool-compact" aria-hidden="true">Sim</span>
+          </label>
+          <label class="tool-check" title="Keep the current line in view while playing (pauses briefly when you scroll yourself)">
+            <input type="checkbox" id="follow">
+            <span class="tool-full">Auto-scroll</span>
+            <span class="tool-compact" aria-hidden="true">Auto</span>
+          </label>
+          <button type="button" id="keysBtn" class="tool-btn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">
+            <span class="tool-full">Keyboard</span>
+            <span class="tool-compact" aria-hidden="true">Kb</span>
+          </button>
+          <button type="button" id="export" class="tool-btn" title="Export .txt">
+            <span class="tool-full">Export .txt</span>
+            <span class="tool-compact" aria-hidden="true">TXT</span>
+          </button>
+          ${(job.manual || r.manual || r.no_audio) ? "" : `<button type="button" id="pdf" class="tool-btn" title="Download a printable PDF (chords + guitar by default)">
+            <span class="tool-full">Export PDF</span>
+            <span class="tool-compact" aria-hidden="true">PDF</span>
+          </button>
+          <a class="button tool-btn" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">
+            <span class="tool-full">MIDI</span>
+            <span class="tool-compact" aria-hidden="true">MID</span>
+          </a>`}
+          <button type="button" id="print" class="tool-btn" title="Print">
+            <span class="tool-full">Print</span>
+            <span class="tool-compact" aria-hidden="true">Prn</span>
+          </button>
         </div>
-        <label title="Show plain major/minor chords (Gsus2 → G, Dmaj7 → D)"><input type="checkbox" id="simple"> Simple chords</label>
-        <label title="Keep the current line in view while playing (pauses briefly when you scroll yourself)"><input type="checkbox" id="follow"> Auto-scroll</label>
-        <button id="keysBtn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">🎹 Keyboard</button>
-        <button id="export">Export .txt</button>
-        <button id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
-        <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>
-        <button id="print">Print</button>
-      </div>
-      <div id="kbd" class="kbd-wrap" hidden></div>
-    </div>
+      </div>`;
+  }
+
+  app.innerHTML = `
+    <div id="kbd" class="kbd-wrap kbd-host no-print" hidden></div>
     <div id="upgrade"></div>
     <div id="suggest"></div>
     <nav class="tabs">
@@ -418,28 +1239,94 @@ function showSong(job) {
     </nav>
     <section id="view"></section>`;
 
-  const audio = app.querySelector("#audio");
+  const noAudio = !!(job.manual || r.manual || r.no_audio);
+
+  // Sticky footer transport (primary play bar)
+  const bar = playbarEl();
+  bar.hidden = false;
+  document.body.classList.add("has-playbar");
+  if (noAudio) {
+    bar.innerHTML = `
+      <span class="playbar-note">No audio — click chords on the paper to add them · edit lyrics by double-click</span>
+      <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
+      <span class="times"><span id="tCur">0:00</span> / <span id="tDur">${fmtTime(r.duration)}</span></span>`;
+  } else {
+    bar.innerHTML = `
+      <button type="button" class="play-toggle" id="playToggle" title="Play / pause" aria-label="Play">▶</button>
+      <div class="now"><span class="cur" id="cur">–</span><span class="nxt" id="nxt"></span></div>
+      <span class="times"><span id="tCur">0:00</span> / <span id="tDur">${fmtTime(r.duration)}</span></span>
+      <input class="seek" id="seek" type="range" min="0" max="${Math.max(1, Math.round(r.duration * 1000))}" value="0" step="50" aria-label="Seek">
+      <select class="stem-pick" id="stem" title="What to listen to">
+        ${["mix", ...(r.stems || [])].map(s => `<option value="${s}">${STEM_LABELS[s] || s}</option>`).join("")}
+      </select>
+      <audio id="audio" preload="auto" src="/api/jobs/${id}/audio/mix"></audio>`;
+  }
+
+  const audio = noAudio
+    ? {
+        currentTime: 0,
+        paused: true,
+        duration: r.duration,
+        play() { return Promise.resolve(); },
+        pause() {},
+        addEventListener() {},
+        removeEventListener() {},
+      }
+    : bar.querySelector("#audio");
   const view = app.querySelector("#view");
-  const curEl = app.querySelector("#cur");
-  const nxtEl = app.querySelector("#nxt");
+  const curEl = bar.querySelector("#cur");
+  const nxtEl = bar.querySelector("#nxt");
+  const playToggle = bar.querySelector("#playToggle");
+  const seek = bar.querySelector("#seek");
+  const tCur = bar.querySelector("#tCur");
+  const tDur = bar.querySelector("#tDur");
 
-  const titleEl = app.querySelector("#title");
-  titleEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); } });
-  titleEl.addEventListener("blur", () => {
-    const t = titleEl.textContent.trim();
-    if (t && t !== job.title) { job.title = t; api.rename(id, t).catch(() => {}); }
-  });
+  if (!noAudio) {
+    const syncPlayUi = () => {
+      playToggle.textContent = audio.paused ? "▶" : "❚❚";
+      playToggle.setAttribute("aria-label", audio.paused ? "Play" : "Pause");
+    };
+    playToggle.onclick = () => {
+      if (audio.paused) audio.play().catch(() => {});
+      else audio.pause();
+    };
+    audio.addEventListener("play", syncPlayUi);
+    audio.addEventListener("pause", syncPlayUi);
+    audio.addEventListener("ended", syncPlayUi);
+    syncPlayUi();
 
-  // Audio source switching keeps position
-  app.querySelector("#stem").onchange = e => {
-    const t = audio.currentTime, playing = !audio.paused;
-    audio.src = `/api/jobs/${id}/audio/${e.target.value}`;
-    audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); }, { once: true });
-  };
+    let seeking = false;
+    seek.onpointerdown = () => { seeking = true; };
+    seek.onpointerup = () => {
+      audio.currentTime = (+seek.value) / 1000;
+      seeking = false;
+    };
+    seek.onchange = () => { audio.currentTime = (+seek.value) / 1000; seeking = false; };
+    const syncSeek = () => {
+      if (!seeking && Number.isFinite(audio.currentTime)) {
+        seek.value = String(Math.round(audio.currentTime * 1000));
+        tCur.textContent = fmtTime(audio.currentTime);
+      }
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        seek.max = String(Math.round(audio.duration * 1000));
+        tDur.textContent = fmtTime(audio.duration);
+      }
+    };
+    audio.addEventListener("timeupdate", syncSeek);
+    audio.addEventListener("loadedmetadata", syncSeek);
+
+    bar.querySelector("#stem").onchange = e => {
+      const t = audio.currentTime, playing = !audio.paused;
+      audio.src = `/api/jobs/${id}/audio/${e.target.value}`;
+      audio.addEventListener("loadedmetadata", () => { audio.currentTime = t; if (playing) audio.play(); syncPlayUi(); }, { once: true });
+    };
+  }
 
   function updateHeader() {
-    app.querySelector("#key").textContent = keyName();
-    app.querySelector("#semis").textContent = st.semis ? (st.semis > 0 ? `+${st.semis}` : st.semis) : "0";
+    const keyEl = document.getElementById("key");
+    if (keyEl) keyEl.textContent = keyName();
+    const semisEl = document.getElementById("semis");
+    if (semisEl) semisEl.textContent = st.semis ? (st.semis > 0 ? `+${st.semis}` : st.semis) : "0";
   }
   const setSemis = d => {
     st.semis = ((st.semis + d + 17) % 12) - 5; // keep within -5..+6
@@ -447,17 +1334,23 @@ function showSong(job) {
     updateHeader();
     render();
   };
-  app.querySelector("#down").onclick = () => setSemis(-1);
-  app.querySelector("#up").onclick = () => setSemis(1);
+  document.getElementById("down").onclick = () => setSemis(-1);
+  document.getElementById("up").onclick = () => setSemis(1);
 
   // Tuning and capo: the server re-frets the tab, the page re-labels chords as shapes.
-  const tuningSel = app.querySelector("#tuning");
-  const capoSel = app.querySelector("#capo");
+  const tuningSel = document.getElementById("tuning");
+  const capoSel = document.getElementById("capo");
   const syncTuningControls = () => {
     r.tuning.name = TUNING_ALIASES[r.tuning.name] || r.tuning.name;
-    if (!TUNINGS.some(([n]) => n === r.tuning.name)) tuningSel.add(new Option(r.tuning.name));
+    if (!TUNINGS.some(([n]) => n === r.tuning.name)) {
+      const opt = new Option(r.tuning.name, r.tuning.name);
+      opt.dataset.full = r.tuning.name;
+      opt.dataset.short = shortTuningLabel(r.tuning.name);
+      tuningSel.add(opt);
+    }
     tuningSel.value = r.tuning.name;
     capoSel.value = String(r.tuning.capo);
+    syncSidebarToolDensity();
   };
   async function setTuning(name, capo) {
     const strings = (TUNINGS.find(([n]) => n === name) || [name, r.tuning.strings])[1];
@@ -530,21 +1423,21 @@ function showSong(job) {
     box.querySelector("#noTuning").onclick = () => { store.set(`tuneHintOff.${id}`, true); box.innerHTML = ""; };
   }
 
-  const simpleBox = app.querySelector("#simple");
+  const simpleBox = document.getElementById("simple");
   simpleBox.checked = st.simple;
   simpleBox.onchange = () => { st.simple = simpleBox.checked; store.set("simple", st.simple); lastChordName = null; render(); };
 
-  const followBox = app.querySelector("#follow");
+  const followBox = document.getElementById("follow");
   followBox.checked = st.follow;
   followBox.onchange = () => { st.follow = followBox.checked; store.set("follow", st.follow); };
-  app.querySelector("#print").onclick = () => window.print();
-  app.querySelector("#export").onclick = () => exportText();
-  app.querySelector("#pdf").onclick = () => {
+  document.getElementById("print").onclick = () => window.print();
+  document.getElementById("export").onclick = () => exportText();
+  document.getElementById("pdf")?.addEventListener("click", () => {
     const parts = ["chords"];
     if (r.parts?.guitar?.note_count) parts.push("guitar");
     else if (r.parts?.bass?.note_count) parts.push("bass");
     window.location.href = `/api/jobs/${id}/pdf?parts=${parts.join(",")}`;
-  };
+  });
 
   const tabBtns = app.querySelectorAll(".tabs button");
   tabBtns.forEach(b => (b.onclick = () => { st.view = b.dataset.view; store.set("view", st.view); render(); }));
@@ -584,7 +1477,10 @@ function showSong(job) {
       if (k < 0) k = words.length - 1;
       slots[k].push({ name: s.chord, si });
     });
-    if (!slots[0].length) {
+    // Audio sheets: show the active chord at line start when it began earlier.
+    // Tab-your-own (no audio): chords stay only on the word they were placed on —
+    // otherwise one edit fills every later line via a long-lived segment.
+    if (!noAudio && !slots[0].length) {
       const si = segIndexAt(ln.start);
       const c = r.chords[si];
       if (c && c.chord !== "N") slots[0].push({ name: c.chord, si, carry: true });
@@ -612,30 +1508,63 @@ function showSong(job) {
     drawRoll();
   }
 
+  function paperHtml(body, { hint = "" } = {}) {
+    const hintHtml = hint ? `<p class="hint no-print">${hint}</p>` : "";
+    return `${hintHtml}<div class="sheet-page"><h2 class="sheet-title" id="sheetTitle" contenteditable="true" spellcheck="false" title="Edit title">${esc(job.title)}</h2><div class="sheet-body">${body}</div></div>`;
+  }
+
+  function bindSheetTitle() {
+    const sheetTitle = view.querySelector("#sheetTitle");
+    if (!sheetTitle) return;
+    sheetTitle.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); sheetTitle.blur(); }
+      if (e.key === "Escape") { sheetTitle.textContent = job.title; sheetTitle.blur(); }
+    });
+    sheetTitle.addEventListener("blur", () => {
+      const t = sheetTitle.textContent.replace(/\s+/g, " ").trim();
+      if (!t) { sheetTitle.textContent = job.title; return; }
+      if (t === job.title) return;
+      job.title = t;
+      api.rename(id, t).catch(() => {});
+      const sideTitle = document.getElementById("sidebarSongTitle");
+      if (sideTitle) {
+        sideTitle.textContent = t;
+        sideTitle.title = t;
+      }
+      refreshSidebar();
+    });
+  }
+
   function renderSheet() {
     const bl = blocks();
-    if (!bl.length) { view.innerHTML = `<p class="empty">No chords or lyrics were detected.</p>`; return; }
-    const missing = r.lyrics.reference ? "" : ` · lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
-    let html = `<p class="hint no-print">Click a word to jump · double-click to edit text · drag the edge handles (or Alt+←/→) to nudge timing ±50ms · click a chord to change it${missing}.</p><div class="sheet">`;
+    if (!bl.length) {
+      view.innerHTML = paperHtml(`<p class="empty">No chords or lyrics were detected.</p>`);
+      bindSheetTitle();
+      return;
+    }
+    const missingHint = r.lyrics.reference ? "" : `lyrics missing? <a href="#" id="pasteLink">paste the full lyrics</a>`;
+    let body = `<div class="sheet">`;
     for (const b of bl) {
       if (b.type === "instr") {
-        html += `<div class="instrumental">${b.measures.map(m =>
+        body += `<div class="instrumental">${b.measures.map(m =>
           `<span class="m" data-mi="${m.i}">${m.chords.map(c => `<b>${esc(show(c))}</b>`).join(" ")}</span>`).join("")}</div>`;
       } else {
         const gap = b.li > 0 && (b.gapBefore > 3 || b.line.stanza) ? ' style="margin-top:22px"' : "";
         if (b.line.section) {
           const sec = (r.confidence?.by_section || []).find(s => s.label === b.line.section);
-          html += `<div class="section-label">${esc(b.line.section)}${sec ? confBadge("trust", sec.score, (sec.reasons || []).join("; ")) : ""}</div>`;
+          body += `<div class="section-label">${esc(b.line.section)}${sec ? confBadge("trust", sec.score, (sec.reasons || []).join("; ")) : ""}</div>`;
         }
-        html += `<div class="line" data-li="${b.li}"${b.line.section ? "" : gap}>` + lineChunks(b.line).map(c => {
+        body += `<div class="line" data-li="${b.li}"${b.line.section ? "" : gap}>` + lineChunks(b.line).map(c => {
           const label = c.chords.map(x => esc(show(x.name))).join(" ");
           const carry = c.chords.length && c.chords.every(x => x.carry) ? " carry" : "";
           const si = c.chords.length ? c.chords[0].si : "";
-          return `<span class="chunk" data-wi="${c.wi}"><span class="c editable${carry}" data-si="${si}">${label || " "}</span><span class="w-wrap"><i class="t-handle t-start no-print" title="Drag start · Alt+←/→ nudge 50ms"></i><span class="w">${esc(c.w.text)}</span><i class="t-handle t-end no-print" title="Drag end · Alt+←/→ nudge 50ms"></i></span></span>`;
+          return `<span class="chunk" data-wi="${c.wi}"><span class="c editable${carry}" data-si="${si}" title="Click to edit chord">${label || "·"}</span><span class="w-wrap"><i class="t-handle t-start no-print" title="Drag start · Alt+←/→ nudge 50ms"></i><span class="w" title="Click to jump · double-click to edit">${esc(c.w.text)}</span><i class="t-handle t-end no-print" title="Drag end · Alt+←/→ nudge 50ms"></i></span></span>`;
         }).join("") + `</div>`;
       }
     }
-    view.innerHTML = html + "</div>";
+    body += `</div>`;
+    view.innerHTML = paperHtml(body, { hint: missingHint });
+    bindSheetTitle();
     view.querySelector("#pasteLink")?.addEventListener("click", e => {
       e.preventDefault();
       st.view = "lyrics";
@@ -650,14 +1579,18 @@ function showSong(job) {
         const wEl = ch.querySelector(".w");
         words.push({ start: w.start, end: w.end, el: wEl, lineEl });
         wEl.onclick = () => { audio.currentTime = w.start; };
-        wEl.ondblclick = () => editWord(ln, w, wEl);
+        wEl.ondblclick = e => { e.preventDefault(); editWord(ln, w, wEl); };
         wEl.onkeydown = e => {
           if (!e.altKey) return;
           if (e.key === "ArrowLeft") { e.preventDefault(); nudgeWord(ln, w, -0.05); }
           if (e.key === "ArrowRight") { e.preventDefault(); nudgeWord(ln, w, 0.05); }
         };
         wEl.tabIndex = 0;
-        ch.querySelector(".c").onclick = e => editChord(e.currentTarget, w);
+        ch.querySelector(".c").onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          editChord(e.currentTarget, w);
+        };
         bindTimingHandle(ch.querySelector(".t-start"), ln, w, "start");
         bindTimingHandle(ch.querySelector(".t-end"), ln, w, "end");
       });
@@ -674,7 +1607,9 @@ function showSong(job) {
     const si = cEl.dataset.si === "" ? null : +cEl.dataset.si;
     const input = document.createElement("input");
     input.className = "chord-input";
-    input.value = cEl.textContent.trim().split(" ")[0];
+    input.setAttribute("aria-label", "Edit chord");
+    const raw = cEl.textContent.trim();
+    input.value = raw === "·" ? "" : raw.split(" ")[0];
     cEl.replaceWith(input);
     input.focus();
     input.select();
@@ -685,7 +1620,10 @@ function showSong(job) {
       if (commit) applyChordEdit(si, word, input.value.trim());
       render();
     };
-    input.onkeydown = e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+    input.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    };
     input.onblur = () => finish(true);
   }
 
@@ -705,8 +1643,35 @@ function showSong(job) {
       if (si > 0) { segs[si - 1].end = segs[si].end; segs.splice(si, 1); } else segs[si].chord = "N";
     } else if (si != null && !isCarry) {
       segs[si].chord = name;
+      // Tab-your-own: keep the chord on this word only (shrink long leftover segments).
+      if (noAudio) {
+        const t0 = word.start;
+        const t1 = Math.max(word.end, t0 + 0.05);
+        const oldEnd = segs[si].end;
+        segs[si].start = t0;
+        segs[si].end = t1;
+        if (t1 < oldEnd - 0.01) segs.splice(si + 1, 0, { start: t1, end: oldEnd, chord: "N" });
+      }
+    } else if (noAudio) {
+      // Tab-your-own: insert a chord spanning only this word, then resume "N".
+      const t0 = word.start;
+      const t1 = Math.max(word.end, t0 + 0.05);
+      const i = segIndexAt(t0);
+      const s = segs[i];
+      const oldEnd = s.end;
+      if (Math.abs(s.start - t0) < 0.05 && s.chord === "N") {
+        s.chord = name;
+        s.end = t1;
+        if (t1 < oldEnd - 0.01) segs.splice(i + 1, 0, { start: t1, end: oldEnd, chord: "N" });
+      } else {
+        s.end = t0;
+        const inserted = [{ start: t0, end: t1, chord: name }];
+        if (t1 < oldEnd - 0.01) inserted.push({ start: t1, end: oldEnd, chord: "N" });
+        segs.splice(i + 1, 0, ...inserted);
+        if (s.end - s.start < 0.01) segs.splice(i, 1);
+      }
     } else {
-      // Add a chord change at this word.
+      // Audio sheet: add a chord change at this word (continues until the next change).
       const t = word.start;
       const i = segIndexAt(t);
       const s = segs[i];
@@ -857,21 +1822,26 @@ function showSong(job) {
   function renderTab(part) {
     const tab = r.parts[part];
     if (!tab || !tab.measures || !tab.measures.length || !tab.note_count) {
-      view.innerHTML = `<p class="empty">No playable notes were found for this part.</p>`;
+      view.innerHTML = paperHtml(`<p class="empty">No playable notes were found for this part.</p>`);
+      bindSheetTitle();
       return;
     }
+    view.innerHTML = paperHtml(`<div class="tabwrap" id="tabBody"></div><div id="tabEdit" class="tab-edit no-print"></div>`, {
+      hint: tabHint(part, tab),
+    });
+    bindSheetTitle();
+    const body = view.querySelector("#tabBody");
     const probe = document.createElement("span");
     probe.className = "tabrow";
     probe.style.cssText = "position:absolute;visibility:hidden";
     probe.textContent = "0".repeat(50);
-    view.innerHTML = "";
-    view.appendChild(probe);
+    body.appendChild(probe);
     const charW = probe.getBoundingClientRect().width / 50 || 8.4;
     probe.remove();
-    const maxChars = Math.max(40, Math.floor(view.clientWidth / charW) - 1);
+    const maxChars = Math.max(40, Math.floor(body.clientWidth / charW) - 1);
 
     const pad = " ".repeat(tab.string_names[0].length + 1);
-    let html = `<p class="hint no-print">${tabHint(part, tab)}</p><div class="tabwrap">`;
+    let html = "";
     for (const row of tabRows(tab, maxChars)) {
       html += `<pre class="tabrow"><span class="chordline">${pad}${row.map(m => `<span data-tm="${m.i}">${esc(m.chords)}</span>`).join("")}</span>\n`;
       for (let s = 0; s < tab.string_names.length; s++) {
@@ -879,8 +1849,7 @@ function showSong(job) {
       }
       html += "</pre>";
     }
-    html += `</div><div id="tabEdit" class="tab-edit no-print"></div>`;
-    view.innerHTML = html;
+    body.innerHTML = html;
     const byMeasure = {};
     view.querySelectorAll("[data-tm]").forEach(el => (byMeasure[el.dataset.tm] ||= []).push(el));
     tab.measures.forEach((m, i) => {
@@ -1014,7 +1983,11 @@ function showSong(job) {
   function renderChords() {
     const seen = [];
     for (const s of r.chords) if (s.chord !== "N" && !seen.includes(diagramName(s.chord))) seen.push(diagramName(s.chord));
-    if (!seen.length) { view.innerHTML = `<p class="empty">No chords detected.</p>`; return; }
+    if (!seen.length) {
+      view.innerHTML = paperHtml(`<p class="empty">No chords detected.</p>`);
+      bindSheetTitle();
+      return;
+    }
     const draw = {
       guitar: c => Chords.diagramSVG(c, shapeStrings()),
       ukulele: c => Chords.diagramSVG(c, UKULELE, false),
@@ -1023,12 +1996,13 @@ function showSong(job) {
     const note = st.instr === "guitar" && !isUniformShift(r.tuning.strings)
       ? `Diagrams are worked out for ${esc(r.tuning.name)}.`
       : st.instr === "guitar" ? "" : "Shown at concert pitch (not affected by guitar tuning or capo).";
-    view.innerHTML = `
+    view.innerHTML = paperHtml(`
       <div class="instr-pick">${[["guitar", "Guitar"], ["ukulele", "Ukulele"], ["piano", "Piano"]].map(([k, label]) =>
         `<button data-instr="${k}" class="${st.instr === k ? "on" : ""}">${label}</button>`).join("")}
         <span class="hint" style="margin:0">${note}</span></div>
       <div class="diagrams ${st.instr}">${seen.map(c => `<div class="diagram" data-chord="${esc(c)}"><div class="name">${esc(c)}</div>${draw(c)}</div>`).join("")}</div>
-      <div class="timeline">${r.chords.map((s, i) => `<div data-i="${i}" title="${esc(diagramName(s.chord))} @ ${fmtTime(s.start)}" style="flex:${(s.end - s.start).toFixed(2)};background:${chordColor(s.chord)}">${esc(diagramName(s.chord))}</div>`).join("")}</div>`;
+      <div class="timeline">${r.chords.map((s, i) => `<div data-i="${i}" title="${esc(diagramName(s.chord))} @ ${fmtTime(s.start)}" style="flex:${(s.end - s.start).toFixed(2)};background:${chordColor(s.chord)}">${esc(diagramName(s.chord))}</div>`).join("")}</div>`);
+    bindSheetTitle();
     view.querySelectorAll(".timeline div").forEach(el => (el.onclick = () => { audio.currentTime = r.chords[+el.dataset.i].start; }));
     view.querySelectorAll("[data-instr]").forEach(b => (b.onclick = () => {
       st.instr = b.dataset.instr;
@@ -1046,7 +2020,11 @@ function showSong(job) {
 
   function renderRoll(part) {
     const notes = (r.parts[part] && r.parts[part].notes) || [];
-    if (!notes.length) { view.innerHTML = `<p class="empty">No notes were found for this part.</p>`; return; }
+    if (!notes.length) {
+      view.innerHTML = paperHtml(`<p class="empty">No notes were found for this part.</p>`);
+      bindSheetTitle();
+      return;
+    }
     const pitches = notes.map(n => n[2] + st.semis);
     let lo = Math.min(...pitches) - 2, hi = Math.max(...pitches) + 2;
     if (hi - lo < 24) { const mid = (hi + lo) >> 1; lo = mid - 12; hi = mid + 12; }
@@ -1055,8 +2033,10 @@ function showSong(job) {
     const what = part === "piano"
       ? "Notes from the piano/keys stem"
       : "The sung melody, one note at a time, ready to play on any instrument";
-    view.innerHTML = `<p class="hint">${what} · ${notes.length} notes · ${st.semis ? "transposed" : "concert pitch"} · click to jump · <a href="/api/jobs/${id}/midi/${part}" download>MIDI</a></p>
-      <div class="roll"><canvas></canvas></div>`;
+    view.innerHTML = paperHtml(`<div class="roll"><canvas></canvas></div>`, {
+      hint: `${what} · ${notes.length} notes · ${st.semis ? "transposed" : "concert pitch"} · click to jump · <a href="/api/jobs/${id}/midi/${part}" download>MIDI</a>`,
+    });
+    bindSheetTitle();
     const canvas = view.querySelector("canvas");
     const height = ROLL_TOP + (hi - lo + 1) * rowH + lyricsStrip;
     canvas.style.height = `${height}px`;
@@ -1150,7 +2130,7 @@ function showSong(job) {
   let keyEls = {}, kb = { name: undefined, offset: null, right: null, live: "" };
 
   function buildKeyboard() {
-    app.querySelector("#keysBtn").classList.toggle("on", st.keys);
+    document.getElementById("keysBtn")?.classList.toggle("on", st.keys);
     kbdEl.hidden = !st.keys;
     if (!st.keys) return;
     const hasPiano = r.parts.piano && r.parts.piano.notes && r.parts.piano.notes.length;
@@ -1162,7 +2142,7 @@ function showSong(job) {
     kb = { name: undefined, offset: null, right: null, live: "" };
     updateKeyboard(audio.currentTime, segIndexAt(audio.currentTime));
   }
-  app.querySelector("#keysBtn").onclick = () => { st.keys = !st.keys; store.set("keys", st.keys); buildKeyboard(); };
+  document.getElementById("keysBtn").onclick = () => { st.keys = !st.keys; store.set("keys", st.keys); buildKeyboard(); };
 
   function setKeys(cls, pitches) {
     kbdEl.querySelectorAll(`.${cls}`).forEach(el => el.classList.remove(cls));
@@ -1239,17 +2219,20 @@ function showSong(job) {
   function renderLyrics() {
     const text = lyricsText();
     const pasted = !!r.lyrics.reference;
-    view.innerHTML = `
-      <p class="hint">${pasted ? "Your lyrics, timed to the song" : `Automatic transcription (${esc(r.lyrics.language || "unknown")})`}
+    const tools = `<p class="hint">${pasted ? "Your lyrics, timed to the song" : `Automatic transcription (${esc(r.lyrics.language || "unknown")})`}
         <button id="editLyrics" style="margin-left:8px">${pasted ? "Edit lyrics" : "Paste full lyrics"}</button>
-        ${text ? `<button id="copy">Copy</button>` : ""}</p>
-      ${text ? `<div class="lyrics-plain">${esc(text)}</div>` : `<p class="empty">No vocals were transcribed. Paste the lyrics to add them.</p>`}`;
+        ${text ? `<button id="copy">Copy</button>` : ""}</p>`;
+    const body = text
+      ? `${tools}<div class="lyrics-plain">${esc(text)}</div>`
+      : `${tools}<p class="empty">No vocals were transcribed. Paste the lyrics to add them.</p>`;
+    view.innerHTML = paperHtml(body);
+    bindSheetTitle();
     view.querySelector("#copy")?.addEventListener("click", e => navigator.clipboard.writeText(text).then(() => (e.target.textContent = "Copied")));
     view.querySelector("#editLyrics").onclick = () => editLyrics(pasted ? r.lyrics.text : text);
   }
 
   function editLyrics(initial) {
-    view.innerHTML = `
+    view.innerHTML = paperHtml(`
       <p class="hint">Paste or type the full lyrics, one sung line per line, with a blank line between verses and choruses.
         Words the transcription heard keep their timing, and the rest are placed where the vocal track has singing.</p>
       <textarea id="lyricsBox" class="lyrics-box" spellcheck="false">${esc(initial || "")}</textarea>
@@ -1258,7 +2241,8 @@ function showSong(job) {
         <button id="cancel">Cancel</button>
         ${r.lyrics.reference ? `<button id="revert">Go back to the automatic transcription</button>` : ""}
         <span id="lyricsStatus" class="hint" style="margin:0"></span>
-      </div>`;
+      </div>`);
+    bindSheetTitle();
     const box = view.querySelector("#lyricsBox");
     box.focus();
     const submit = async text => {
@@ -1382,7 +2366,7 @@ function showSong(job) {
     if (!audio.paused) raf = requestAnimationFrame(tick);
   }
 
-  // Auto-scroll: keep the current line ~30% down the space below the sticky player,
+  // Auto-scroll: keep the current line ~30% down the space below the sticky header,
   // so the upcoming lines stay visible. Manual scrolling pauses it for a few seconds.
   let manualUntil = 0;
   const onManualScroll = () => { manualUntil = performance.now() + 4000; };
@@ -1391,8 +2375,11 @@ function showSong(job) {
 
   function followTo(el) {
     if (!el || !st.follow || audio.paused || performance.now() < manualUntil) return;
-    const top = app.querySelector(".player").getBoundingClientRect().bottom;
-    const target = window.scrollY + el.getBoundingClientRect().top - top - (window.innerHeight - top) * 0.3;
+    const header = document.querySelector(".topbar");
+    const top = header ? header.getBoundingClientRect().bottom : 0;
+    const bottomReserve = bar.getBoundingClientRect().height || 0;
+    const usable = Math.max(120, window.innerHeight - top - bottomReserve);
+    const target = window.scrollY + el.getBoundingClientRect().top - top - usable * 0.3;
     if (Math.abs(target - window.scrollY) > 8) window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
   }
 
@@ -1407,6 +2394,7 @@ function showSong(job) {
   audio.addEventListener("seeked", tick);
 
   const onKey = e => {
+    if (noAudio) return;
     if (e.code !== "Space" || e.target.closest("input, select, [contenteditable=true], button")) return;
     e.preventDefault();
     audio.paused ? audio.play() : audio.pause();
@@ -1430,4 +2418,13 @@ function showSong(job) {
   buildKeyboard();
   render();
   tick();
+
+  const confBtn = document.getElementById("confOverall");
+  if (confBtn && r.confidence) {
+    const markSeen = () => store.set(`confModalSeen.${id}`, true);
+    confBtn.onclick = () => openConfidenceModal(r.confidence);
+    if (!store.get(`confModalSeen.${id}`, false)) {
+      openConfidenceModal(r.confidence, { auto: true, onDismiss: markSeen });
+    }
+  }
 }

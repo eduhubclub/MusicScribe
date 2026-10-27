@@ -52,6 +52,31 @@ class JobStore:
         self._write(job_id, meta)
         return meta
 
+    def create_manual(self, title: str, lyrics_text: str) -> dict:
+        """Create a finished no-audio job from pasted lyrics (Tab your own)."""
+        from .manual_sheet import build_manual_result
+
+        job_id = uuid.uuid4().hex[:12]
+        (self.root / job_id).mkdir()
+        result = build_manual_result(lyrics_text)
+        meta = {
+            "id": job_id,
+            "title": title[:200],
+            "filename": "manual.txt",
+            "options": {"manual": True},
+            "status": "done",
+            "stage": "done",
+            "stage_label": "Done",
+            "progress": 1.0,
+            "error": None,
+            "created": time.time(),
+            "device": "manual",
+            "manual": True,
+        }
+        self._write(job_id, meta)
+        self.save_result(job_id, result)
+        return meta
+
     def enqueue(self, job_id: str) -> None:
         self._update(job_id, status="queued")
         self._queue.put(job_id)
