@@ -476,6 +476,33 @@ html[data-theme="dark"] #sidebarTheme {
   font-size: 11px;
 }
 .sidebar-meta .conf-badge { align-self: flex-start; }
+.sidebar-song-tools {
+  margin: 0;
+  padding: 0;
+}
+.sidebar-song-tools .controls {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+}
+.sidebar-song-tools select,
+.sidebar-song-tools .button,
+.sidebar-song-tools button {
+  width: 100%;
+  justify-content: center;
+}
+.sidebar-song-tools label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 500; color: var(--chrome-text);
+  cursor: pointer;
+}
+.sidebar-song-tools .transpose {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+}
+.sidebar-song-tools .transpose button {
+  width: 36px; flex: 0 0 auto;
+}
+.sidebar-song-tools .transpose span {
+  flex: 1 1 auto; min-width: 0;
+}
 .sidebar-lib {
   flex: 0 0 auto;
   padding: 10px 8px 4px;
@@ -491,10 +518,15 @@ body.on-library-page .sidebar-list,
 body.on-library-page .sidebar-meta {
   display: none !important;
 }
-/* Song page: keep title + meta; hide LIBRARY label and song list */
+/* Song page: keep title + meta + tools; hide LIBRARY label and song list */
 body.on-song-page .sidebar-lib,
 body.on-song-page .sidebar-list {
   display: none !important;
+}
+body.on-song-page .sidebar-meta {
+  flex: 1 1 auto;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 .sidebar-list {
   flex: 1 1 auto; overflow: auto; padding: 8px 8px 12px;

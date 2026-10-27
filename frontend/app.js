@@ -738,30 +738,31 @@ function showSong(job) {
         ${r.parts?.guitar ? `<span class="source-badge ${r.parts.guitar.source_fallback ? "fallback" : ""}" title="${esc(r.parts.guitar.source_reason || "")}">Source: ${esc(STEM_LABELS[r.parts.guitar.source] || r.parts.guitar.source)}</span>` : ""}
         ${(job.manual || r.manual || r.no_audio) ? `<span class="source-badge">Tab your own</span>` : ""}
         ${r.confidence ? confOverallBtn(r.confidence.overall, r.confidence.disclaimer) : ""}
+      </div>
+      <hr class="sidebar-meta-rule">
+      <div class="sidebar-song-tools song-tools no-print">
+        <div class="controls">
+          <select id="tuning" title="Your guitar's tuning: chord names, diagrams and tab follow it">
+            ${TUNINGS.map(([n]) => `<option>${n}</option>`).join("")}
+          </select>
+          <select id="capo" title="Capo">
+            ${Array.from({ length: 10 }, (_, c) => `<option value="${c}">${c ? `Capo ${c}` : "No capo"}</option>`).join("")}
+          </select>
+          <div class="transpose" title="Transpose to another key (resets when you change tuning or capo)">
+            <button type="button" id="down">−</button><span id="semis"></span><button type="button" id="up">+</button>
+          </div>
+          <label title="Show plain major/minor chords (Gsus2 → G, Dmaj7 → D)"><input type="checkbox" id="simple"> Simple chords</label>
+          <label title="Keep the current line in view while playing (pauses briefly when you scroll yourself)"><input type="checkbox" id="follow"> Auto-scroll</label>
+          <button type="button" id="keysBtn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">🎹 Keyboard</button>
+          <button type="button" id="export">Export .txt</button>
+          ${(job.manual || r.manual || r.no_audio) ? "" : `<button type="button" id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
+          <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>`}
+          <button type="button" id="print">Print</button>
+        </div>
       </div>`;
   }
 
   app.innerHTML = `
-    <div class="song-tools no-print">
-      <div class="controls">
-        <select id="tuning" title="Your guitar's tuning: chord names, diagrams and tab follow it">
-          ${TUNINGS.map(([n]) => `<option>${n}</option>`).join("")}
-        </select>
-        <select id="capo" title="Capo">
-          ${Array.from({ length: 10 }, (_, c) => `<option value="${c}">${c ? `Capo ${c}` : "No capo"}</option>`).join("")}
-        </select>
-        <div class="transpose" title="Transpose to another key (resets when you change tuning or capo)">
-          <button id="down">−</button><span id="semis"></span><button id="up">+</button>
-        </div>
-        <label title="Show plain major/minor chords (Gsus2 → G, Dmaj7 → D)"><input type="checkbox" id="simple"> Simple chords</label>
-        <label title="Keep the current line in view while playing (pauses briefly when you scroll yourself)"><input type="checkbox" id="follow"> Auto-scroll</label>
-        <button id="keysBtn" title="Live keyboard: the current chord to play, the next one, and the piano track's notes">🎹 Keyboard</button>
-        <button id="export">Export .txt</button>
-        ${(job.manual || r.manual || r.no_audio) ? "" : `<button id="pdf" title="Download a printable PDF (chords + guitar by default)">Export PDF</button>
-        <a class="button" href="/api/jobs/${id}/midi/all" download title="Every part as one MIDI file">MIDI</a>`}
-        <button id="print">Print</button>
-      </div>
-    </div>
     <div id="kbd" class="kbd-wrap kbd-host no-print" hidden></div>
     <div id="upgrade"></div>
     <div id="suggest"></div>
@@ -859,7 +860,7 @@ function showSong(job) {
   function updateHeader() {
     const keyEl = document.getElementById("key");
     if (keyEl) keyEl.textContent = keyName();
-    const semisEl = app.querySelector("#semis");
+    const semisEl = document.getElementById("semis");
     if (semisEl) semisEl.textContent = st.semis ? (st.semis > 0 ? `+${st.semis}` : st.semis) : "0";
   }
   const setSemis = d => {
@@ -868,12 +869,12 @@ function showSong(job) {
     updateHeader();
     render();
   };
-  app.querySelector("#down").onclick = () => setSemis(-1);
-  app.querySelector("#up").onclick = () => setSemis(1);
+  document.getElementById("down").onclick = () => setSemis(-1);
+  document.getElementById("up").onclick = () => setSemis(1);
 
   // Tuning and capo: the server re-frets the tab, the page re-labels chords as shapes.
-  const tuningSel = app.querySelector("#tuning");
-  const capoSel = app.querySelector("#capo");
+  const tuningSel = document.getElementById("tuning");
+  const capoSel = document.getElementById("capo");
   const syncTuningControls = () => {
     r.tuning.name = TUNING_ALIASES[r.tuning.name] || r.tuning.name;
     if (!TUNINGS.some(([n]) => n === r.tuning.name)) tuningSel.add(new Option(r.tuning.name));
@@ -951,16 +952,16 @@ function showSong(job) {
     box.querySelector("#noTuning").onclick = () => { store.set(`tuneHintOff.${id}`, true); box.innerHTML = ""; };
   }
 
-  const simpleBox = app.querySelector("#simple");
+  const simpleBox = document.getElementById("simple");
   simpleBox.checked = st.simple;
   simpleBox.onchange = () => { st.simple = simpleBox.checked; store.set("simple", st.simple); lastChordName = null; render(); };
 
-  const followBox = app.querySelector("#follow");
+  const followBox = document.getElementById("follow");
   followBox.checked = st.follow;
   followBox.onchange = () => { st.follow = followBox.checked; store.set("follow", st.follow); };
-  app.querySelector("#print").onclick = () => window.print();
-  app.querySelector("#export").onclick = () => exportText();
-  app.querySelector("#pdf")?.addEventListener("click", () => {
+  document.getElementById("print").onclick = () => window.print();
+  document.getElementById("export").onclick = () => exportText();
+  document.getElementById("pdf")?.addEventListener("click", () => {
     const parts = ["chords"];
     if (r.parts?.guitar?.note_count) parts.push("guitar");
     else if (r.parts?.bass?.note_count) parts.push("bass");
@@ -1630,7 +1631,7 @@ function showSong(job) {
   let keyEls = {}, kb = { name: undefined, offset: null, right: null, live: "" };
 
   function buildKeyboard() {
-    app.querySelector("#keysBtn").classList.toggle("on", st.keys);
+    document.getElementById("keysBtn")?.classList.toggle("on", st.keys);
     kbdEl.hidden = !st.keys;
     if (!st.keys) return;
     const hasPiano = r.parts.piano && r.parts.piano.notes && r.parts.piano.notes.length;
@@ -1642,7 +1643,7 @@ function showSong(job) {
     kb = { name: undefined, offset: null, right: null, live: "" };
     updateKeyboard(audio.currentTime, segIndexAt(audio.currentTime));
   }
-  app.querySelector("#keysBtn").onclick = () => { st.keys = !st.keys; store.set("keys", st.keys); buildKeyboard(); };
+  document.getElementById("keysBtn").onclick = () => { st.keys = !st.keys; store.set("keys", st.keys); buildKeyboard(); };
 
   function setKeys(cls, pitches) {
     kbdEl.querySelectorAll(`.${cls}`).forEach(el => el.classList.remove(cls));
