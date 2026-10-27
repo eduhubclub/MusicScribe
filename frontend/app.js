@@ -622,7 +622,6 @@ function showTuner() {
         <canvas class="tuner-wave" id="tunerWave" width="640" height="80" aria-hidden="true"></canvas>
         <p class="tuner-status" id="tunerStatus">Starting microphone…</p>
         <button type="button" class="primary" id="tunerToggle" hidden>Start tuner</button>
-        <a class="button" href="#/create">Back to Create</a>
       </div>
     </section>`;
 
@@ -780,7 +779,6 @@ function showRecord() {
       <h1>Record</h1>
       <p class="lede">Capture a take with your microphone. Everything stays on this computer.</p>
       <button class="primary" id="rec">Start recording</button>
-      <a class="button" href="#/create">Back to Create</a>
       <div class="options">
         <label>Lyrics quality
           <select id="wm">
@@ -863,7 +861,6 @@ function showTabYourOwn() {
       </label>
       <div class="tabown-actions">
         <button class="primary" id="tabownCreate">Create sheet</button>
-        <a class="button" href="#/create">Back to Create</a>
         <span id="tabownStatus" class="hint" style="margin:0"></span>
       </div>
     </section>`;
@@ -943,7 +940,6 @@ function showLibrary() {
       <p class="lede">Drop an MP3, WAV, FLAC, M4A, or video — or pick a file. Everything stays on this computer.</p>
       <input type="file" id="file" accept="audio/*,video/*" hidden>
       <button class="primary" id="pick">Choose a file</button>
-      <a class="button" href="#/create">Back to Create</a>
       <div class="options">
         <label>Lyrics quality
           <select id="wm">
