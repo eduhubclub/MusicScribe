@@ -463,8 +463,12 @@ html[data-theme="dark"] #sidebarTheme {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .sidebar-meta-rule {
-  display: block; width: 100%; height: 0; margin: 0;
-  border: 0; border-top: var(--edu-border-thin);
+  display: block; width: 100%; height: 0; margin: 2px 0;
+  border: 0; border-top: var(--edu-border);
+  flex: 0 0 auto;
+}
+.sidebar-meta-rule.title-rule {
+  margin: 4px 0 6px;
 }
 .sidebar-meta .facts {
   display: flex; flex-direction: column; align-items: stretch; gap: 6px;

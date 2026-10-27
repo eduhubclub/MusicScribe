@@ -730,7 +730,7 @@ function showSong(job) {
     metaEl.hidden = false;
     metaEl.innerHTML = `
       <div class="sidebar-song-title" id="sidebarSongTitle" title="${esc(job.title)}">${esc(job.title)}</div>
-      <hr class="sidebar-meta-rule">
+      <hr class="sidebar-meta-rule title-rule" aria-hidden="true">
       <div class="facts">
         <span>Key <b id="key"></b></span>
         <span>Tempo <b>${Math.round(r.tempo)} BPM</b></span>
