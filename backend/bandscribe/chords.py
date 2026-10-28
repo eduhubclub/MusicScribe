@@ -10,23 +10,29 @@ SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
 # suffix -> (intervals, prior penalty). Richer chords need more evidence to be chosen.
+# maj9/add9 slightly cheaper than before vs sus2 so 3rd+9th voicings don't collapse;
+# absolute penalties stay high enough that plain triads still beat 9ths.
 QUALITIES = {
     "": ([0, 4, 7], 0.0),
     "m": ([0, 3, 7], 0.0),
     "7": ([0, 4, 7, 10], 0.035),
-    "maj7": ([0, 4, 7, 11], 0.04),
+    "maj7": ([0, 4, 7, 11], 0.038),
     "m7": ([0, 3, 7, 10], 0.035),
     "sus4": ([0, 5, 7], 0.03),
-    "sus2": ([0, 2, 7], 0.03),
+    "sus2": ([0, 2, 7], 0.04),
     "dim": ([0, 3, 6], 0.05),
     # Extended / altered — higher penalty so diatonic songs stay plain.
-    "add9": ([0, 2, 4, 7], 0.045),
-    "9": ([0, 2, 4, 7, 10], 0.055),
-    "maj9": ([0, 2, 4, 7, 11], 0.055),
+    "add9": ([0, 2, 4, 7], 0.04),
+    "9": ([0, 2, 4, 7, 10], 0.05),
+    "maj9": ([0, 2, 4, 7, 11], 0.048),
     "m9": ([0, 2, 3, 7, 10], 0.055),
     "aug": ([0, 4, 8], 0.05),
     "m7b5": ([0, 3, 6, 10], 0.05),
 }
+# Extra sus2 cost when chroma also shows a major 3rd with the 9th (maj9/add9 territory).
+# Bare 0+2+7 (no 3rd) keeps sus2; plain maj triads are unaffected (no 9th).
+SUS2_MAJ_CONFLICT = 0.12
+SUS2_CONFLICT_REF = 0.18  # chroma mass where conflict penalty saturates
 # Map suffix -> triad class for the diatonic prior.
 BASE = {
     "": "maj", "7": "maj", "maj7": "maj", "add9": "maj", "9": "maj", "maj9": "maj", "aug": "maj",
@@ -162,6 +168,12 @@ def recognize(harm: np.ndarray, bass: np.ndarray, sr: int, beats: np.ndarray, du
     for k, (root, suffix, template, penalty) in enumerate(states):
         bonus = DIATONIC_BONUS if (root, BASE.get(suffix)) in diatonic else 0.0
         S[k] = template @ Cn - penalty + bonus + BASS_WEIGHT * bass_presence * Bn[root]
+        if suffix == "sus2":
+            # Shared scale degree 2: sus2 steals maj9/add9 when the 3rd is also present.
+            third = Cn[(root + 4) % 12]
+            ninth = Cn[(root + 2) % 12]
+            conflict = np.minimum(third, ninth)
+            S[k] -= SUS2_MAJ_CONFLICT * np.clip(conflict / SUS2_CONFLICT_REF, 0.0, 1.0)
     S[-1] = np.where(quiet, 1.0, 0.3)  # "N" = no chord
 
     P = np.exp(BETA * (S - S.max(axis=0, keepdims=True)))
