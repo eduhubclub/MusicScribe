@@ -105,10 +105,27 @@ def _chord_score(result: dict, start: float, end: float) -> tuple[float, list[st
     return _round(avg), reasons
 
 
-def _lyric_score(result: dict, start: float, end: float, line_idxs: list[int]) -> tuple[float, list[str]]:
+def _lyrics_skipped(result: dict) -> bool:
+    """True when ASR was intentionally skipped (instrumental / pasted) — score is N/A."""
     lyrics = result.get("lyrics") or {}
+    if lyrics.get("asr_skipped"):
+        return True
+    hints = result.get("pipeline_hints") or {}
+    return bool(hints.get("asr_skipped"))
+
+
+def _lyric_score(result: dict, start: float, end: float, line_idxs: list[int]):
+    """Return (score|None, reasons). None = N/A (skipped), never a fake low %."""
+    lyrics = result.get("lyrics") or {}
+    reasons: list[str] = []
+    if _lyrics_skipped(result):
+        why = lyrics.get("skip_reason") or (result.get("pipeline_hints") or {}).get("skip_reason")
+        if why == "instrumental":
+            return None, ["skipped — instrumental (no ASR)"]
+        if why == "pasted_lyrics":
+            return None, ["skipped — user pasted lyrics (no ASR)"]
+        return None, ["skipped — ASR not run"]
     lines = lyrics.get("lines") or []
-    reasons = []
     if not lines:
         return 0.15, ["no lyrics transcribed"]
     region = [lines[i] for i in line_idxs] if line_idxs else [
@@ -211,7 +228,7 @@ def compute(result: dict, notes_by_part: dict[str, list] | None = None) -> dict:
     part_reasons["chords"] = c_reasons
 
     l_score, l_reasons = _lyric_score(result, 0.0, float(result.get("duration") or 0), [])
-    by_part["lyrics"] = l_score
+    by_part["lyrics"] = l_score  # may be None = N/A
     part_reasons["lyrics"] = l_reasons
 
     for name in ("guitar", "bass"):
@@ -242,13 +259,16 @@ def compute(result: dict, notes_by_part: dict[str, list] | None = None) -> dict:
         scores.append(cs)
         reasons.extend(f"chords: {x}" for x in cr[:1])
         ls, lr = _lyric_score(result, sec["start"], sec["end"], sec.get("line_idxs") or [])
-        scores.append(ls)
-        reasons.extend(f"lyrics: {x}" for x in lr[:1])
+        if ls is None:
+            reasons.extend(f"lyrics: {x}" for x in lr[:1])
+        else:
+            scores.append(ls)
+            reasons.extend(f"lyrics: {x}" for x in lr[:1])
         # Weight section by available parts present song-wide
         for name in ("guitar", "bass", "drums"):
-            if name in by_part:
+            if name in by_part and by_part[name] is not None:
                 scores.append(by_part[name])
-        sec_score = _round(mean(scores))
+        sec_score = _round(mean(scores)) if scores else None
         by_section.append({
             "id": sec["id"],
             "label": sec["label"],
@@ -258,11 +278,12 @@ def compute(result: dict, notes_by_part: dict[str, list] | None = None) -> dict:
             "reasons": reasons[:6],
         })
 
-    overall = _round(mean(by_part.values())) if by_part else 0.2
+    numeric = [v for v in by_part.values() if isinstance(v, (int, float))]
+    overall = _round(mean(numeric)) if numeric else 0.2
     return {
         "overall": overall,
         "by_part": by_part,
         "by_section": by_section,
         "part_reasons": part_reasons,
-        "disclaimer": "Scores flag uncertainty from available signals; they are not accuracy guarantees.",
+        "disclaimer": "Scores flag uncertainty from available signals; they are not accuracy guarantees. N/A means that part was skipped — not a low score.",
     }

@@ -110,11 +110,29 @@ def list_jobs():
     return store.list()
 
 
+TRACK_TYPES = {"full", "guitar", "bass", "drums", "other"}
+
+
+def _parse_has_vocals(raw: str) -> bool | None:
+    """Form value: empty/auto → None; true/false → bool. Default path omits the key (full pipeline)."""
+    s = (raw or "").strip().lower()
+    if s in ("", "auto"):
+        return None
+    if s in ("1", "true", "yes", "on"):
+        return True
+    if s in ("0", "false", "no", "off"):
+        return False
+    raise HTTPException(400, f"invalid has_vocals {raw!r}")
+
+
 @app.post("/api/jobs")
 async def create_job(
     file: UploadFile = File(...),
     whisper_model: str = Form("small"),
     language: str = Form(""),
+    has_vocals: str = Form("true"),
+    track_type: str = Form("full"),
+    lyrics_text: str = Form(""),
 ):
     name = file.filename or "recording.webm"
     ext = Path(name).suffix.lower() or ".webm"
@@ -122,8 +140,25 @@ async def create_job(
         raise HTTPException(400, f"unsupported file type {ext}")
     if whisper_model not in WHISPER_MODELS:
         raise HTTPException(400, f"unknown whisper model {whisper_model}")
+    tt = (track_type or "full").strip().lower()
+    if tt not in TRACK_TYPES:
+        raise HTTPException(400, f"unknown track_type {track_type}")
+    vocals = _parse_has_vocals(has_vocals)
 
-    meta = store.create(name, Path(name).stem, {"whisper_model": whisper_model, "language": language.strip()})
+    options: dict = {
+        "whisper_model": whisper_model,
+        "language": language.strip(),
+        "track_type": tt,
+    }
+    # Default UI sends has_vocals=true (same as auto energy gate for full mix with vocals).
+    # Only persist when the client set a value; true still means "run Whisper path".
+    if vocals is not None:
+        options["has_vocals"] = vocals
+    pasted = (lyrics_text or "").strip()
+    if pasted:
+        options["lyrics_text"] = pasted
+
+    meta = store.create(name, Path(name).stem, options)
     dest = store.dir(meta["id"]) / f"source{ext}"
     with dest.open("wb") as fh:
         while chunk := await file.read(1 << 20):
