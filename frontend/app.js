@@ -31,8 +31,13 @@ const api = {
   upload(file, opts) {
     const fd = new FormData();
     fd.append("file", file, file.name);
-    fd.append("whisper_model", opts.whisper_model);
-    fd.append("language", opts.language);
+    fd.append("whisper_model", opts.whisper_model || "small");
+    fd.append("language", opts.language || "");
+    fd.append("has_vocals", opts.has_vocals === false || opts.has_vocals === "false" ? "false" : "true");
+    fd.append("track_type", opts.track_type || "full");
+    if (opts.lyrics_text && String(opts.lyrics_text).trim()) {
+      fd.append("lyrics_text", String(opts.lyrics_text).trim());
+    }
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json);
   },
   createManual: (title, lyrics) => fetch("/api/jobs/manual", {
@@ -226,18 +231,21 @@ function detectPitchHz(buf, sampleRate, minHz = 70) {
   const lag = bestLag + Math.max(-1, Math.min(1, shift));
   return sampleRate / lag;
 }
-const confLevel = s => (s < 0.55 ? "low" : s < 0.75 ? "mid" : "ok");
+const confLevel = s => (s == null || Number.isNaN(s) ? "na" : s < 0.55 ? "low" : s < 0.75 ? "mid" : "ok");
+const confPct = s => (s == null || Number.isNaN(s) ? "N/A" : `${Math.round(s * 100)}%`);
 const confBadge = (label, score, title = "") =>
-  `<span class="conf-badge ${confLevel(score)}" title="${esc(title || "")}">${esc(label)} ${Math.round(score * 100)}%</span>`;
+  `<span class="conf-badge ${confLevel(score)}" title="${esc(title || "")}">${esc(label)} ${confPct(score)}</span>`;
 const confOverallBtn = (score, title = "") =>
   `<button type="button" class="conf-badge conf-overall ${confLevel(score)}" id="confOverall"
-    title="${esc(title || "Show confidence breakdown")}">overall ${Math.round(score * 100)}%</button>`;
+    title="${esc(title || "Show confidence breakdown")}">overall ${confPct(score)}</button>`;
 const confMetersHtml = conf => {
   const parts = Object.entries(conf.by_part || {});
   if (!parts.length) return "";
   return `<div class="conf-parts">${parts.map(([k, v]) => {
     const why = ((conf.part_reasons || {})[k] || []).join("; ");
-    return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${Math.round(v * 100)}%"></i><em>${Math.round(v * 100)}%</em></div>`;
+    const na = v == null || Number.isNaN(v);
+    const width = na ? 0 : Math.round(v * 100);
+    return `<div class="conf-row ${confLevel(v)}" title="${esc(why)}"><span>${esc(k)}</span><i style="width:${width}%"></i><em>${confPct(v)}</em></div>`;
   }).join("")}</div>`;
 };
 
@@ -256,7 +264,7 @@ function openConfidenceModal(conf, { auto = false, onDismiss } = {}) {
         <button type="button" class="conf-modal-close" id="confModalClose" aria-label="Close">×</button>
       </div>
       <p class="conf-modal-overall">
-        <span class="conf-badge ${confLevel(conf.overall)}">overall ${Math.round(conf.overall * 100)}%</span>
+        <span class="conf-badge ${confLevel(conf.overall)}">overall ${confPct(conf.overall)}</span>
       </p>
       ${confMetersHtml(conf)}
       <p class="conf-modal-note">${esc(conf.disclaimer || "Scores flag uncertainty — not accuracy guarantees.")}</p>
@@ -760,44 +768,100 @@ function showTuner() {
   start();
 }
 
-/* ---------------- Record (microphone) ---------------- */
+/* ---------------- Upload / record pipeline hints ---------------- */
 
-function showRecord() {
-  const opts = store.get("opts", { whisper_model: "small", language: "" });
-  app.innerHTML = `
-    <section class="home-hero record-hero">
-      <h1>Record</h1>
-      <p class="lede">Capture a take with your microphone. Everything stays on this computer.</p>
-      <button class="primary" id="rec">Start recording</button>
-      <div class="options">
-        <label>Lyrics quality
+const DEFAULT_UPLOAD_OPTS = {
+  whisper_model: "small",
+  language: "",
+  has_vocals: true,
+  track_type: "full",
+  lyrics_text: "",
+};
+
+function uploadHintsHtml(opts) {
+  const langs = ["en English", "es Spanish", "fr French", "de German", "it Italian", "pt Portuguese", "nl Dutch", "sv Swedish", "ja Japanese", "ko Korean", "zh Chinese"];
+  return `
+      <div class="options upload-hints">
+        <fieldset class="hint-field hint-vocals">
+          <legend>Vocals</legend>
+          <label class="hint-radio"><input type="radio" name="hasVocals" value="true" ${opts.has_vocals !== false ? "checked" : ""}> Has vocals</label>
+          <label class="hint-radio"><input type="radio" name="hasVocals" value="false" ${opts.has_vocals === false ? "checked" : ""}> Instrumental</label>
+        </fieldset>
+        <label class="hint-field">Track type
+          <select id="trackType">
+            <option value="full">Full mix</option>
+            <option value="guitar">Guitar stem</option>
+            <option value="bass">Bass stem</option>
+            <option value="drums">Drums stem</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label class="hint-field hint-asr">Lyrics quality
           <select id="wm">
             <option value="small">Fast (small)</option>
             <option value="medium">Better (medium)</option>
             <option value="large-v3-turbo">Best (large-v3-turbo)</option>
           </select>
         </label>
-        <label>Language
+        <label class="hint-field hint-asr">Language
           <select id="lang">
             <option value="">Auto-detect</option>
-            ${["en English", "es Spanish", "fr French", "de German", "it Italian", "pt Portuguese", "nl Dutch", "sv Swedish", "ja Japanese", "ko Korean", "zh Chinese"]
-              .map(s => `<option value="${s.slice(0, 2)}">${s.slice(3)}</option>`).join("")}
+            ${langs.map(s => `<option value="${s.slice(0, 2)}">${s.slice(3)}</option>`).join("")}
           </select>
         </label>
       </div>
-      <p id="status" style="margin:14px 0 0"></p>
-    </section>`;
-  const wm = app.querySelector("#wm");
-  const lang = app.querySelector("#lang");
-  const status = app.querySelector("#status");
-  const recBtn = app.querySelector("#rec");
-  wm.value = opts.whisper_model;
-  lang.value = opts.language;
-  const currentOpts = () => {
-    const o = { whisper_model: wm.value, language: lang.value };
-    store.set("opts", o);
+      <label class="hint-lyrics">Lyrics already known? <span class="hint-optional">(optional — skips listening for words)</span>
+        <textarea id="lyricsPaste" class="hint-lyrics-area" rows="3" spellcheck="true"
+          placeholder="Paste lyrics to skip ASR…">${esc(opts.lyrics_text || "")}</textarea>
+      </label>`;
+}
+
+function bindUploadHints(root, opts) {
+  const wm = root.querySelector("#wm");
+  const lang = root.querySelector("#lang");
+  const trackType = root.querySelector("#trackType");
+  const lyricsPaste = root.querySelector("#lyricsPaste");
+  wm.value = opts.whisper_model || "small";
+  lang.value = opts.language || "";
+  trackType.value = opts.track_type || "full";
+  const syncAsrEnabled = () => {
+    const instrumental = root.querySelector('input[name="hasVocals"]:checked')?.value === "false";
+    const pasted = !!(lyricsPaste.value || "").trim();
+    const skip = instrumental || pasted;
+    root.querySelectorAll(".hint-asr select").forEach(el => { el.disabled = skip; });
+  };
+  root.querySelectorAll('input[name="hasVocals"]').forEach(el => el.addEventListener("change", syncAsrEnabled));
+  lyricsPaste.addEventListener("input", syncAsrEnabled);
+  syncAsrEnabled();
+  return () => {
+    const hasVocals = root.querySelector('input[name="hasVocals"]:checked')?.value !== "false";
+    const o = {
+      whisper_model: wm.value,
+      language: lang.value,
+      has_vocals: hasVocals,
+      track_type: trackType.value || "full",
+      lyrics_text: (lyricsPaste.value || "").trim(),
+    };
+    store.set("opts", { ...o, lyrics_text: "" }); // don't persist pasted lyrics
     return o;
   };
+}
+
+/* ---------------- Record (microphone) ---------------- */
+
+function showRecord() {
+  const opts = { ...DEFAULT_UPLOAD_OPTS, ...store.get("opts", {}) };
+  app.innerHTML = `
+    <section class="home-hero record-hero">
+      <h1>Record</h1>
+      <p class="lede">Capture a take with your microphone. Everything stays on this computer.</p>
+      <button class="primary" id="rec">Start recording</button>
+      ${uploadHintsHtml(opts)}
+      <p id="status" style="margin:14px 0 0"></p>
+    </section>`;
+  const status = app.querySelector("#status");
+  const recBtn = app.querySelector("#rec");
+  const currentOpts = bindUploadHints(app, opts);
   async function upload(file) {
     status.innerHTML = `<span class="upload-busy"><img class="wizard-line-art" src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;
     try {
@@ -923,29 +987,14 @@ async function refreshLibraryGrid() {
 /* ---------------- Home (upload-first) ---------------- */
 
 function showLibrary() {
-  const opts = store.get("opts", { whisper_model: "small", language: "" });
+  const opts = { ...DEFAULT_UPLOAD_OPTS, ...store.get("opts", {}) };
   app.innerHTML = `
     <section class="home-hero drop" id="drop">
       <h1>Upload your song</h1>
       <p class="lede">Drop an MP3, WAV, FLAC, M4A, or video — or pick a file. Everything stays on this computer.</p>
       <input type="file" id="file" accept="audio/*,video/*" hidden>
       <button class="primary" id="pick">Choose a file</button>
-      <div class="options">
-        <label>Lyrics quality
-          <select id="wm">
-            <option value="small">Fast (small)</option>
-            <option value="medium">Better (medium)</option>
-            <option value="large-v3-turbo">Best (large-v3-turbo)</option>
-          </select>
-        </label>
-        <label>Language
-          <select id="lang">
-            <option value="">Auto-detect</option>
-            ${["en English", "es Spanish", "fr French", "de German", "it Italian", "pt Portuguese", "nl Dutch", "sv Swedish", "ja Japanese", "ko Korean", "zh Chinese"]
-              .map(s => `<option value="${s.slice(0, 2)}">${s.slice(3)}</option>`).join("")}
-          </select>
-        </label>
-      </div>
+      ${uploadHintsHtml(opts)}
       <p id="status" style="margin:14px 0 0"></p>
     </section>
     <section class="home-recent">
@@ -978,16 +1027,8 @@ function showLibrary() {
 
   const drop = app.querySelector("#drop");
   const fileInput = app.querySelector("#file");
-  const wm = app.querySelector("#wm");
-  const lang = app.querySelector("#lang");
   const status = app.querySelector("#status");
-  wm.value = opts.whisper_model;
-  lang.value = opts.language;
-  const currentOpts = () => {
-    const o = { whisper_model: wm.value, language: lang.value };
-    store.set("opts", o);
-    return o;
-  };
+  const currentOpts = bindUploadHints(app, opts);
 
   async function upload(file) {
     status.innerHTML = `<span class="upload-busy"><img class="wizard-line-art" src="/assets/wizard-sax.png" alt=""> Uploading ${esc(file.name)}…</span>`;

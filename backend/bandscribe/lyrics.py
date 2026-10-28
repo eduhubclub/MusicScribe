@@ -122,6 +122,42 @@ def lines_from_words(words: list[dict]) -> list[dict]:
     return [{"start": c[0]["start"], "end": c[-1]["end"], "words": c} for c in _split_lines(words)]
 
 
+def lines_from_pasted(text: str, duration: float, vocals: Path | None = None) -> list[dict]:
+    """Time pasted lyrics without Whisper — spread on vocal activity when a stem exists, else evenly.
+
+    Used when the user already provided lyrics on upload (skip ASR). Not a confidence claim.
+    """
+    parsed = parse_lyrics(text)
+    flat = [{"line": li, "text": t} for li, ln in enumerate(parsed) for t in ln["text"].split()]
+    if not flat:
+        return []
+    n = len(flat)
+    duration = max(float(duration), 0.1)
+    if vocals is not None and Path(vocals).exists():
+        try:
+            active = _vocal_activity(vocals)
+            starts = _spread(n, 0.0, duration, active)
+        except Exception:
+            log.exception("vocal activity failed; spreading pasted lyrics evenly")
+            starts = list(np.linspace(0.0, duration, n, endpoint=False))
+    else:
+        starts = list(np.linspace(0.0, duration, n, endpoint=False))
+    for k, w in enumerate(flat):
+        nxt = starts[k + 1] if k + 1 < n else duration
+        w["start"] = round(float(starts[k]), 3)
+        w["end"] = round(max(min(nxt, w["start"] + MAX_WORD_DUR), w["start"] + 0.05), 3)
+    out = []
+    for li, ln in enumerate(parsed):
+        ws = [{"text": w["text"], "start": w["start"], "end": w["end"]} for w in flat if w["line"] == li]
+        if not ws:
+            continue
+        out.append({
+            "start": ws[0]["start"], "end": ws[-1]["end"], "words": ws,
+            "stanza": ln["stanza"], "section": ln["section"],
+        })
+    return out
+
+
 # --- Aligning pasted lyrics to the song -------------------------------------------------
 
 ACTIVITY_HOP = 0.05

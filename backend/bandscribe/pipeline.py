@@ -23,8 +23,30 @@ STAGES = [
 STANDARD_TUNING = {"name": "Standard", "strings": tabs.GUITAR, "capo": 0}
 GUITAR_SOURCES = ["guitar", "piano", "other"]  # a guitar part is written even if the song has no guitar
 PRESENT = 0.05                                  # a stem counts as playing at this share of the mix level
+TRACK_TYPES = frozenset({"full", "guitar", "bass", "drums", "other"})
 
 Progress = Callable[[str, str, float], None]
+
+
+def _truthy_vocals(options: dict) -> bool | None:
+    """None = auto (energy gate); True/False = user hint."""
+    if "has_vocals" not in options:
+        return None
+    v = options["has_vocals"]
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() not in ("0", "false", "no", "off", "")
+    return bool(v)
+
+
+def _track_type(options: dict) -> str:
+    t = str(options.get("track_type") or "full").strip().lower()
+    return t if t in TRACK_TYPES else "full"
+
+
+def _pasted_lyrics(options: dict) -> str:
+    return str(options.get("lyrics_text") or "").strip()
 
 
 def _load(path: Path) -> np.ndarray:
@@ -43,11 +65,15 @@ def _write(path: Path, data) -> None:
 def run(job_dir: Path, source: Path, options: dict, progress: Progress) -> dict:
     done = 0.0
     stage_iter = iter(STAGES)
+    track_type = _track_type(options)
+    vocals_hint = _truthy_vocals(options)
+    pasted = _pasted_lyrics(options)
+    skip_asr = bool(pasted) or vocals_hint is False
 
-    def step():
+    def step(label_override: str | None = None):
         nonlocal done
         sid, label, share = next(stage_iter)
-        progress(sid, label, done)
+        progress(sid, label_override or label, done)
         done += share
 
     work = job_dir / "work"
@@ -60,8 +86,12 @@ def run(job_dir: Path, source: Path, options: dict, progress: Progress) -> dict:
     mix_wav = work / "mix.wav"
     audio.to_wav(source, mix_wav)
 
-    step()
-    stems, device = separate.separate(mix_wav, stems_dir)
+    if track_type != "full":
+        step("Using uploaded stem (skipping separation)")
+        stems, device = separate.passthrough_stems(mix_wav, stems_dir, track_type)
+    else:
+        step()
+        stems, device = separate.separate(mix_wav, stems_dir)
 
     step()
     mix = _load(mix_wav)
@@ -69,16 +99,60 @@ def run(job_dir: Path, source: Path, options: dict, progress: Progress) -> dict:
 
     step()
     stem_audio = {name: _load(p) for name, p in stems.items()}
-    harm = sum(stem_audio[s] for s in ("guitar", "piano", "other", "bass"))
-    chord_res = chords.recognize(harm, stem_audio["bass"], SR, beats, duration)
+    # Stem uploads: harmonic content lives on the role stem, not a Demucs sum.
+    if track_type == "drums":
+        # Avoid inventing chords from a drum-only stem.
+        harm = np.zeros_like(mix)
+        bass_for_chords = harm
+    elif track_type in separate.TRACK_TYPE_STEM:
+        role = separate.TRACK_TYPE_STEM[track_type]
+        harm = stem_audio.get(role, mix)
+        bass_for_chords = stem_audio["bass"] if track_type == "bass" else harm
+    else:
+        harm = sum(stem_audio[s] for s in ("guitar", "piano", "other", "bass"))
+        bass_for_chords = stem_audio["bass"]
+    chord_res = chords.recognize(harm, bass_for_chords, SR, beats, duration)
     phase = rhythm.downbeat_phase(chord_res["beat_labels"])
     measures = rhythm.measures(len(beats), phase)
 
-    step()
+    if pasted:
+        lyrics_label = "Using pasted lyrics"
+    elif skip_asr:
+        lyrics_label = "Skipping lyrics (instrumental)"
+    else:
+        lyrics_label = None
+    step(lyrics_label)
     mix_rms = _rms(mix)
-    if lyrics.has_vocals(stems["vocals"], mix_rms):
-        lyric_res = lyrics.transcribe(stems["vocals"], options.get("whisper_model", "small"),
-                                      options.get("language") or None)
+    asr_skipped = False
+    skip_reason = None
+    if pasted:
+        # User already provided lyrics — never call Whisper.
+        vocal_path = stems.get("vocals") if vocals_hint is not False else None
+        lyric_res = {
+            "language": options.get("language") or None,
+            "lines": lyrics.lines_from_pasted(pasted, duration, vocal_path),
+            "text": pasted,
+            "asr_skipped": True,
+            "skip_reason": "pasted_lyrics",
+        }
+        asr_skipped = True
+        skip_reason = "pasted_lyrics"
+    elif vocals_hint is False:
+        lyric_res = {
+            "language": None,
+            "lines": [],
+            "asr_skipped": True,
+            "skip_reason": "instrumental",
+        }
+        asr_skipped = True
+        skip_reason = "instrumental"
+    elif lyrics.has_vocals(stems["vocals"], mix_rms):
+        # Default / "Has vocals": same energy gate as before (no regression).
+        lyric_res = lyrics.transcribe(
+            stems["vocals"],
+            options.get("whisper_model", "small"),
+            options.get("language") or None,
+        )
     else:
         lyric_res = {"language": None, "lines": []}
 
@@ -94,11 +168,18 @@ def run(job_dir: Path, source: Path, options: dict, progress: Progress) -> dict:
         "lyrics": lyric_res,
         "tuning": STANDARD_TUNING,
         "stems": sorted(stems),
+        "pipeline_hints": {
+            "has_vocals": vocals_hint,
+            "track_type": track_type,
+            "asr_skipped": asr_skipped,
+            "skip_reason": skip_reason,
+            "demucs_skipped": track_type != "full",
+        },
     }
 
     step()
     levels = {name: _rms(y) for name, y in stem_audio.items()}
-    build_parts(job_dir, result, stems.__getitem__, levels, mix_rms)
+    build_parts(job_dir, result, stems.__getitem__, levels, mix_rms, track_type=track_type)
 
     step()
     audio.to_mp3(mix_wav, audio_dir / "mix.mp3")
@@ -112,34 +193,53 @@ def run(job_dir: Path, source: Path, options: dict, progress: Progress) -> dict:
 
 
 def build_parts(job_dir: Path, result: dict, stem_path: Callable[[str], Path],
-                levels: dict[str, float], mix_rms: float) -> None:
+                levels: dict[str, float], mix_rms: float, track_type: str = "full") -> None:
     """Transcribe each instrument that is playing into result['parts']."""
     playing = {s for s, level in levels.items() if level >= PRESENT * mix_rms}
     loudest = max(GUITAR_SOURCES, key=lambda s: levels.get(s, 0.0))
     guitar_level = levels.get("guitar", 0.0)
     loudest_level = levels.get(loudest, 0.0)
     # Prefer the dedicated guitar stem when it is competitive; otherwise fall back and say so.
-    if guitar_level >= 0.3 * loudest_level and "guitar" in levels:
+    if track_type == "guitar":
         guitar_src, guitar_fallback = "guitar", False
+        guitar_reason = "uploaded guitar stem"
+    elif track_type == "other":
+        guitar_src, guitar_fallback = "other", False
+        guitar_reason = "uploaded other stem as guitar source"
+    elif guitar_level >= 0.3 * loudest_level and "guitar" in levels:
+        guitar_src, guitar_fallback = "guitar", False
+        guitar_reason = "dedicated guitar stem"
     else:
         guitar_src, guitar_fallback = loudest, True
+        guitar_reason = f"guitar stem quiet vs {loudest}; tab from {guitar_src}"
 
     sources = {"guitar": guitar_src, "bass": "bass", "piano": "piano", "melody": "vocals"}
+    # Stem uploads: only chase the instruments that make sense for that stem.
+    if track_type == "drums":
+        want = set()
+    elif track_type == "bass":
+        want = {"bass"}
+    elif track_type in ("guitar", "other"):
+        want = {"guitar"}
+    else:
+        want = None  # full mix — current behavior
+
     parts = {}
     for part, stem in sources.items():
-        if part == "guitar" or stem in playing:
-            found = notes.detect(stem_path(stem), part)
-            _write(job_dir / f"notes_{part}.json", found)
-            parts[part] = {"source": stem}
-            if part == "guitar":
-                parts[part]["source_fallback"] = guitar_fallback
-                parts[part]["source_reason"] = (
-                    f"guitar stem quiet vs {loudest}; tab from {stem}"
-                    if guitar_fallback else "dedicated guitar stem"
-                )
-            if part in ("piano", "melody"):
-                parts[part]["notes"] = [[n["start"], n["end"], n["pitch"], round(n["amp"], 2)] for n in found]
-    if "drums" in playing:
+        if want is not None:
+            if part not in want:
+                continue
+        elif not (part == "guitar" or stem in playing):
+            continue
+        found = notes.detect(stem_path(stem), part)
+        _write(job_dir / f"notes_{part}.json", found)
+        parts[part] = {"source": stem}
+        if part == "guitar":
+            parts[part]["source_fallback"] = guitar_fallback
+            parts[part]["source_reason"] = guitar_reason
+        if part in ("piano", "melody"):
+            parts[part]["notes"] = [[n["start"], n["end"], n["pitch"], round(n["amp"], 2)] for n in found]
+    if track_type == "drums" or "drums" in playing:
         hits = drums.transcribe(stem_path("drums"))
         parts["drums"] = {"source": "drums", **drums.build_tab(hits, np.array(result["beats"]), result["measures"])}
 
@@ -257,7 +357,11 @@ def upgrade(job_dir: Path, result: dict) -> dict:
     _migrate(result)
     audio_dir = job_dir / "audio"
     levels = {s: _rms(_load(audio_dir / f"{s}.mp3")) for s in result["stems"]}
-    build_parts(job_dir, result, lambda s: audio_dir / f"{s}.mp3", levels, _rms(_load(audio_dir / "mix.mp3")))
+    track_type = (result.get("pipeline_hints") or {}).get("track_type") or "full"
+    build_parts(
+        job_dir, result, lambda s: audio_dir / f"{s}.mp3", levels,
+        _rms(_load(audio_dir / "mix.mp3")), track_type=track_type,
+    )
     result["version"] = 2
     _write(job_dir / "result.json", result)
     return result
