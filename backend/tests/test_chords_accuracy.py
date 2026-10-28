@@ -29,7 +29,11 @@ F = {
     "C3": 130.81, "E3": 164.81, "G3": 196.00, "B3": 246.94, "D4": 293.66,
     "A2": 110.00, "F2": 87.31, "G2": 98.00, "B2": 123.47, "D3": 146.83,
     "C4": 261.63, "E2": 82.41, "Fs2": 92.50, "G4": 392.00,
+    "Fs3": 185.00, "A3": 220.00, "Cs3": 138.59,
 }
+
+GMAJ9_FAMILY = {"Gmaj9", "Gmaj7", "Gadd9", "G9"}
+BM7_FAMILY = {"Bm7", "Bm"}
 
 
 def _recognize(harm: np.ndarray, bass: np.ndarray, beats: np.ndarray | None = None) -> dict:
@@ -115,6 +119,37 @@ class ChordAccuracyTests(unittest.TestCase):
         quals = {_root_quality(x) for x in res["beat_labels"]}
         self.assertTrue(quals <= {"Cmaj9", "Cmaj7", "C9", "Cadd9", "C"}, quals)
         self.assertTrue(any(q in {"Cmaj9", "C9", "Cadd9", "Cmaj7"} for q in quals), quals)
+        self.assertFalse(any("sus2" in q for q in quals), quals)
+
+    def test_gmaj9_d_a_bm7_loop(self):
+        # Calibration: 4 Guitar / maj9-loop sketch — Gmaj9 → D → A → Bm7.
+        # Gmaj9 = G B D F# A; accept maj9/maj7/add9/9 family; Bm7 ≈ Bm.
+        segs = [
+            ([F["G2"], F["B2"], F["D3"], F["Fs3"], F["A3"]], F["G2"]),
+            ([F["D3"], F["Fs3"], F["A3"]], F["D3"]),
+            ([F["A2"], F["Cs3"], F["E3"]], F["A2"]),
+            ([F["B2"], F["D3"], F["Fs3"], F["A3"]], F["B2"]),
+        ]
+        harm = np.concatenate([_chord(fs) for fs, _ in segs])
+        bass = np.concatenate([_chord([b]) for _, b in segs])
+        res = _recognize(harm, bass, np.array([0.0, 1.0, 2.0, 3.0]))
+        got = [_root_quality(x) for x in res["beat_labels"]]
+        self.assertIn(got[0], GMAJ9_FAMILY, got)
+        self.assertEqual(got[1], "D", got)
+        self.assertEqual(got[2], "A", got)
+        self.assertIn(got[3], BM7_FAMILY, got)
+        # Honest posterior confidence — finite, not hard-coded marketing floors.
+        self.assertEqual(len(res["beat_confidence"]), 4)
+        for c in res["beat_confidence"]:
+            self.assertTrue(0.0 <= c <= 1.0, c)
+
+    def test_sus2_without_third_stays_sus2(self):
+        # Bare 0+2+7 must still prefer sus2 (not flood maj9/add9).
+        harm = _chord([F["G2"], F["A3"], F["D3"]], 2.0)
+        bass = _chord([F["G2"]], 2.0)
+        res = _recognize(harm, bass, np.array([0.0, 1.0]))
+        quals = {_root_quality(x) for x in res["beat_labels"]}
+        self.assertEqual(quals, {"Gsus2"}, quals)
 
     def test_root_position_has_no_slash(self):
         harm = _chord([F["C3"], F["E3"], F["G3"]], 2.0)
